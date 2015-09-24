@@ -2,6 +2,16 @@ package bda.local.ml.model
 
 import bda.local.ml.impurity.{Variance, Impurity}
 
+/**
+ * Class of status of the node in a tree.
+ *
+ * @param impurityCalculator impurity calculator [[bda.local.ml.impurity.Impurity]]
+ * @param count number of instances the node has
+ * @param sum summation of labels of instances the node has
+ * @param sumSquares summation of squares of labels of instances the node has
+ * @param leftIndex leftmost id of instances the node has
+ * @param rightIndex next id of rightmost instances the node has
+ */
 class Stat(
     var impurityCalculator: Impurity,
     var count: Int,
@@ -10,6 +20,7 @@ class Stat(
     var leftIndex: Int,
     var rightIndex: Int) {
 
+  /** information value of the node */
   var impurity = impurityCalculator.calculate(count, sum, sumSquares)
 
   override def toString: String = {
@@ -18,6 +29,11 @@ class Stat(
       s"impurity = $impurity"
   }
 
+  /**
+   * Method to copy another stat.
+   *
+   * @param stat stat of another node
+   */
   def copy(stat: Stat): Unit = {
     this.impurityCalculator = stat.impurityCalculator
     this.count = stat.count
@@ -28,6 +44,15 @@ class Stat(
     this.impurity = stat.impurity
   }
 
+  /**
+   * Method to udpate stat of the node with variations.
+   *
+   * @param countBias count variation of the node
+   * @param sumBias sum variation of the node
+   * @param sumSquaresBias sumSquares variation of the node
+   * @param leftIndexBias left index variation of the node
+   * @param rightIndexBias right index variation of the node
+   */
   def update(
       countBias: Int,
       sumBias: Double,
@@ -43,24 +68,50 @@ class Stat(
     impurity = impurityCalculator.calculate(count, sum, sumSquares)
   }
 
+  /**
+   * Method to add a instance which is next to the leftmost instance of the node.
+   *
+   * @param value the true label of the instance which will be added
+   */
   def +:(value: Double): Unit = {
     update(1, value, value * value, -1, 0)
   }
 
+  /**
+   * Method to add a instance which is next to the rightmost instance of the node.
+   *
+   * @param value the true label of the instance which will be added
+   */
   def :+(value: Double): Unit = {
     update(1, value, value * value, 0, 1)
   }
 
+  /**
+   * Method to subtract a instance which is next to the leftmost instance of the node.
+   *
+   * @param value the true label of the instance which will be subtracted
+   */
   def -:(value: Double): Unit = {
     update(-1, -1 * value, -1 * value * value, 1, 0)
   }
 
+  /**
+   * Method to subtract a instance which is next to the rightmost instance of the node.
+   *
+   * @param value the true label of the instance which will be subtracted
+   */
   def :-(value: Double): Unit = {
     update(-1, -1 * value, -1 * value * value, 0, -1)
   }
 }
 
 object Stat {
+
+  /**
+   * Construct a [[Stat]] instance with original value.
+   *
+   * @return a [[Stat]] instance
+   */
   def empty = {
     new Stat(Variance, 0, 0, 0, 0, 0)
   }

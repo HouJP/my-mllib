@@ -1,8 +1,14 @@
 package bda.local.ml.Strategy
 
 import bda.local.ml.loss.{Loss, SquaredError}
-import bda.local.ml.loss.SquaredError
 
+/**
+ * Class of strategy for GBoost.
+ *
+ * @param numIterations number of iterations
+ * @param learningRate vlaue of learning rate
+ * @param loss loss function [[bda.local.ml.loss.Loss]]
+ */
 case class GBoostStrategy (
     // Required parameters
     // Optional parameters

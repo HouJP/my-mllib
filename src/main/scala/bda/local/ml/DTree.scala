@@ -1,11 +1,23 @@
 package bda.local.ml
 
 import bda.local.ml.model._
+import bda.local.ml.strategy.DTreeStrategy
 import bda.local.ml.util.Log
 import scala.collection.mutable
 
+/**
+ * A class which implements a decision tree algorithm for classification and regression.
+ *
+ * @param dTreetrategy the configuration parameters for the decision tree algorithm
+ */
 class DTree (private val dTreetrategy: DTreeStrategy) {
 
+  /**
+   * Method to train a decision tree over a training data which represented as an array of [[bda.local.ml.model.LabeledPoint]]
+   *
+   * @param input traning data: Array of [[bda.local.ml.model.LabeledPoint]]
+   * @return a [[bda.local.ml.model.DTreeModel]] instance which can be used for prediction
+   */
   def run(input: Array[LabeledPoint]): DTreeModel = {
     val dTreeMetadata = DTreeMetadata.build(input, dTreetrategy)
 
@@ -44,6 +56,13 @@ class DTree (private val dTreetrategy: DTreeStrategy) {
 
 object DTree {
 
+  /**
+   * Method to train a decision tree over a traning data.
+   *
+   * @param input training data: Array of [[bda.local.ml.model.LabeledPoint]]
+   * @param dTreeStrategy the configuration parameters for the decision tree: [[bda.local.ml.strategy.DTreeStrategy]]
+   * @return a [[bda.local.ml.model.DTreeModel]] instance
+   */
   def train(input: Array[LabeledPoint], dTreeStrategy: DTreeStrategy): DTreeModel = {
     new DTree(dTreeStrategy).run(input)
   }
@@ -58,6 +77,14 @@ object DTree {
     return true
   }
 
+  /**
+   * Find the best threshold to split the front node in the queue.
+   *
+   * @param input training data
+   * @param dataIndex the index array of the training data
+   * @param nodeQueue nodes queue which stored the nodes need to be splited
+   * @param dTreeMetadata training data metadata and the strategy of the decision tree
+   */
   def findBestSplit(
       input: Array[LabeledPoint],
       dataIndex: Array[Int],

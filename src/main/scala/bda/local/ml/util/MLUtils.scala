@@ -5,10 +5,14 @@ import bda.local.ml.model.LabeledPoint
 
 import scala.io.Source
 
+/**
+ * Class of tools used to load data.
+ */
 object MLUtils {
 
   /**
    * Loads file into an Array[String]
+   *
    * @param path file path in local file system URI
    * @return file content stored as an Array[String]
    */
@@ -19,6 +23,12 @@ object MLUtils {
     content.toArray
   }
 
+  /**
+   * Loads labeled data in the LIBSVM format into an Array[LabeledPoint].
+   *
+   * @param path the path of the datafile on the disk
+   * @return labeled data stored as an Array[LabeledPoint]
+   */
   def loadLibSVMFile(path: String): Array[LabeledPoint] = {
     val parsed = loadFile(path)
       .map(_.trim)

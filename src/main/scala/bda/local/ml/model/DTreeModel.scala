@@ -5,10 +5,23 @@ import bda.local.ml.DTreeStrategy
 import bda.local.ml.loss.SquaredError
 import bda.local.ml.util.Log
 
+/**
+ * Decision tree model for classification or regression.
+ * This model stores the decision tree structure and parameters.
+ *
+ * @param topNode root node of decision tree structure
+ * @param dTreeStrategy strategy of decision tree
+ */
 class DTreeModel(
     val topNode: Node,
     val dTreeStrategy: DTreeStrategy) {
 
+  /**
+   * Predict values for a single data point using the model trained.
+   *
+   * @param features feature vector of a single data point
+   * @return predicted value from the trained model
+   */
   def predict(features: SparseVector[Double]): Double = {
     var node = topNode
     while (!node.isLeaf) {
@@ -21,6 +34,13 @@ class DTreeModel(
     node.predict
   }
 
+  /**
+   * Predict values for the given data using the model trained.
+   * Statistic RMSE while predicting.
+   *
+   * @param input Array of [[bda.local.ml.model.LabeledPoint]] represent true label and features of data points
+   * @return Array stored prediction
+   */
   def predict(input: Array[LabeledPoint]): Array[Double] = {
     val se = new SquaredError
 
@@ -35,6 +55,11 @@ class DTreeModel(
     output
   }
 
+  /**
+   * Store decision tree model on the disk.
+   *
+   * @param path path of the location on the disk
+   */
   def save(path: String): Unit = {
     DTreeModel.save(path, this)
   }
@@ -42,11 +67,22 @@ class DTreeModel(
 
 object DTreeModel {
 
+  /**
+   * Store decision tree model on the disk.
+   *
+   * @param path path of the location on the disk
+   * @param model decision tree model
+   */
   def save(path: String, model: DTreeModel): Unit = {
-
+    // TODO
   }
 
+  /**
+   * Load decision tree model from the disk.
+   *
+   * @param path path of the localtion on the disk
+   */
   def load(path: String): Unit = {
-
+    // TODO
   }
 }
