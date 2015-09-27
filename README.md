@@ -34,7 +34,7 @@ TODO
 * Rate: 70%-training, 30%-testing
 
 | Algorithm | max_depth | min_samples_leaf | cost_time | train_RMSE | test_RMSE |
-| - | - | - | - | - | - |
+| ---- | ---- | ---- | ---- | ---- | ---- |
 | sklearn.tree.DecisionTreeRegressor 	| 15 | 10 | - | 45111.32 | 61751.50 |
 |										| 15 | 20 | - | 50701.13 | 58233.37 |
 |										| 20 | 20 | _ | 50758.53 | 59627.13 |
@@ -42,7 +42,6 @@ TODO
 | bda.local.ml.DTree 	| 15 | 10 | - | 32438.77 | 65735.05 |
 |						| 15 | 20 | - | 39596.32 | 62751.22 |
 |						| 20 | 20 | - | 37900.60 | 63104.04 |
-
 
 
 ****
