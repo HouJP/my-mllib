@@ -18,7 +18,7 @@ class SquaredError {
    * @param prediction predicted feature
    * @param label true label
    */
-  def :+(prediction: Double, label: Double): Unit = {
+  def :+=(prediction: Double, label: Double): Unit = {
     sumSE += SquaredError.computeError(prediction, label)
     count += 1
   }

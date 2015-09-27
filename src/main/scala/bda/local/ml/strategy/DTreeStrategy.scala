@@ -15,8 +15,8 @@ import bda.local.ml.loss.{SquaredError, Loss}
 class DTreeStrategy(
     var impurity: Impurity = Variance,
     var loss: Loss = SquaredError,
-    var minNodeSize: Int = 1,
-    var maxDepth: Int = 10,
+    var minNodeSize: Int = 20,
+    var maxDepth: Int = 20,
     var minInfoGain: Double = 0.0) {}
 
 object DTreeStrategy {

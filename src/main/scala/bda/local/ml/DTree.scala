@@ -1,6 +1,6 @@
 package bda.local.ml
 
-import bda.local.ml.model._
+import bda.local.ml.model.{DTreeMetadata, LabeledPoint, DTreeModel, Stat, Node}
 import bda.local.ml.strategy.DTreeStrategy
 import bda.local.ml.util.Log
 import scala.collection.mutable
@@ -10,7 +10,7 @@ import scala.collection.mutable
  *
  * @param dTreetrategy the configuration parameters for the decision tree algorithm
  */
-class DTree (private val dTreetrategy: DTreeStrategy) {
+class DTreeTrainer (private val dTreetrategy: DTreeStrategy) {
 
   /**
    * Method to train a decision tree over a training data which represented as an array of [[bda.local.ml.model.LabeledPoint]]
@@ -18,13 +18,13 @@ class DTree (private val dTreetrategy: DTreeStrategy) {
    * @param input traning data: Array of [[bda.local.ml.model.LabeledPoint]]
    * @return a [[bda.local.ml.model.DTreeModel]] instance which can be used for prediction
    */
-  def run(input: Array[LabeledPoint]): DTreeModel = {
+  def fit(input: Array[LabeledPoint]): DTreeModel = {
     val dTreeMetadata = DTreeMetadata.build(input, dTreetrategy)
 
     val dataIndex = new Array[Int](dTreeMetadata.numData)
     for (index <- 0 until dTreeMetadata.numData) {
       dataIndex(index) = index
-    }
+    } // zip with index
 
     // stat of the root
     val leftIndex = 0
@@ -37,7 +37,7 @@ class DTree (private val dTreetrategy: DTreeStrategy) {
       sum += value
       sumSquares += value * value
     }
-    val stat = new Stat(dTreetrategy.impurity, count, sum, sumSquares, leftIndex, rightIndex)
+    val stat = new Stat(dTreetrategy.impurity, count, sum, sumSquares, leftIndex, rightIndex) // nodeinfo
 
     // root of the decision tree
     val predict = dTreetrategy.loss.predict(stat)
@@ -47,25 +47,14 @@ class DTree (private val dTreetrategy: DTreeStrategy) {
     nodeQueue.enqueue((topNode, stat)) // topNode covers dataIndex [0, numData)
 
     while (nodeQueue.nonEmpty) {
-      DTree.findBestSplit(input, dataIndex, nodeQueue, dTreeMetadata)
+      DTreeTrainer.findBestSplit(input, dataIndex, nodeQueue, dTreeMetadata)
     }
 
     new DTreeModel(topNode, dTreetrategy)
   }
 }
 
-object DTree {
-
-  /**
-   * Method to train a decision tree over a traning data.
-   *
-   * @param input training data: Array of [[bda.local.ml.model.LabeledPoint]]
-   * @param dTreeStrategy the configuration parameters for the decision tree: [[bda.local.ml.strategy.DTreeStrategy]]
-   * @return a [[bda.local.ml.model.DTreeModel]] instance
-   */
-  def train(input: Array[LabeledPoint], dTreeStrategy: DTreeStrategy): DTreeModel = {
-    new DTree(dTreeStrategy).run(input)
-  }
+object DTreeTrainer {
 
   def checkNode(node: Node, stat: Stat, dTreeMetadata: DTreeMetadata): Boolean = {
     if (node.dep >= dTreeMetadata.dTreeStrategy.maxDepth) {
@@ -97,7 +86,7 @@ object DTree {
     if (!checkNode(node, stat, dTreeMetadata)) {
       node.isLeaf = true
 
-      Log.log("INFO", s"node_${node.id} stop split")
+//      Log.log("INFO", s"node_${node.id} stop split")
       return
     }
 
@@ -172,15 +161,15 @@ object DTree {
       nodeQueue.enqueue((leftNode, bestLeftStat))
       nodeQueue.enqueue((rightNode, bestRightStat))
 
-      Log.log("INFO", s"node_${node.id} split into node_${leftNode.id} and node_${rightNode.id}, " +
-        s"with splitValue = ${node.splitValue} and featureID = ${node.featureID}")
-      Log.log("INFO", s"\t\tnode_${node.id}'s stat: $stat")
-      Log.log("INFO", s"\t\tnode_${leftNode.id}'s stat: $bestLeftStat")
-      Log.log("INFO", s"\t\tnode_${rightNode.id}'s stat: $bestRightStat")
+//      Log.log("INFO", s"node_${node.id} split into node_${leftNode.id} and node_${rightNode.id}, " +
+//        s"with splitValue = ${node.splitValue} and featureID = ${node.featureID}")
+//      Log.log("INFO", s"\t\tnode_${node.id}'s stat: $stat")
+//      Log.log("INFO", s"\t\tnode_${leftNode.id}'s stat: $bestLeftStat")
+//      Log.log("INFO", s"\t\tnode_${rightNode.id}'s stat: $bestRightStat")
     } else {
       node.isLeaf = true
 
-      Log.log("INFO", s"node_${node.id} stop split, with predict = ${node.predict}")
+//      Log.log("INFO", s"node_${node.id} stop split, with predict = ${node.predict}")
     }
   }
 }

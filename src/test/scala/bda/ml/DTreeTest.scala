@@ -1,26 +1,24 @@
 package bda.ml
 
-import bda.local.ml.{DTree, DTreeStrategy}
+import bda.local.ml.strategy.DTreeStrategy
+import bda.local.ml.{DTreeTrainer}
 import bda.local.ml.util.MLUtils
 
 object DTreeTest {
   def main(args: Array[String]) {
-    val path = "/Users/hugh_627/ICT/GBoost/project/GBoost/data/train"
+    val train_path = "/Users/hugh_627/ICT/bda/gboost/data/cadata.part1"
+    val test_path = "/Users/hugh_627/ICT/bda/gboost/data/cadata.part2"
 
-    val labeledPoint = MLUtils.loadLibSVMFile(path)
+    val train_points = MLUtils.loadLibSVMFile(train_path)
+    val test_points = MLUtils.loadLibSVMFile(test_path)
 
     val dTreeStrategy = DTreeStrategy.default
+    dTreeStrategy.maxDepth = 20
+    dTreeStrategy.minNodeSize = 20
 
-    val model = DTree.train(labeledPoint, dTreeStrategy)
+    val model = new DTreeTrainer(dTreeStrategy).fit(train_points)
 
-    var rmse = 0.0
-    labeledPoint.foreach { point =>
-      rmse += math.pow(model.predict(point.features) - point.label, 2)
-    }
-    rmse /= labeledPoint.length
-    rmse = math.sqrt(rmse)
-    println(s"rmse = $rmse")
-
-    model.predict(labeledPoint)
+    model.predict(train_points)
+    model.predict(test_points)
   }
 }

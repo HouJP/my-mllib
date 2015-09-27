@@ -1,7 +1,7 @@
 package bda.local.ml.model
 
 import bda.common.linalg.immutable.SparseVector
-import bda.local.ml.DTreeStrategy
+import bda.local.ml.strategy.DTreeStrategy
 import bda.local.ml.loss.SquaredError
 import bda.local.ml.util.Log
 
@@ -46,7 +46,7 @@ class DTreeModel(
 
     val output = input.map { p =>
       val pre = predict(p.features)
-      se :+ (pre, p.label)
+      se :+= (pre, p.label)
       pre
     }
 
