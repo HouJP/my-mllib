@@ -34,7 +34,7 @@ TODO
 * Rate: 70%-training, 30%-testing
 
 | Algorithm | max_depth | min_samples_leaf | cost_time | train_RMSE | test_RMSE |
-| - |
+| - | - | - | - | - | - |
 | sklearn.tree.DecisionTreeRegressor 	| 15 | 10 | - | 45111.32 | 61751.50 |
 |										| 15 | 20 | - | 50701.13 | 58233.37 |
 |										| 20 | 20 | _ | 50758.53 | 59627.13 |
@@ -61,6 +61,8 @@ TODO
 ****
 
 ###<a name="version">Version Updating</a>
+*	2015/09/27
+	* implement gbdt algorithm
 
 *	2015/09/25
 	*	use sklearn.tree.DecisionTreeRegressor to generate baseline for performance evaluation
