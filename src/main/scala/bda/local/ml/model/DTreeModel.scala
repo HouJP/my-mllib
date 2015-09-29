@@ -1,31 +1,32 @@
 package bda.local.ml.model
 
 import bda.common.linalg.immutable.SparseVector
-import bda.local.ml.strategy.DTreeStrategy
-import bda.local.ml.loss.SquaredError
+import bda.local.ml.loss.{SquaredErrorCounter, SquaredErrorCalculator}
+import bda.local.ml.para.DTreePara
 import bda.local.ml.util.Log
+import bda.local.ml.para.Loss._
 
 /**
  * Decision tree model for classification or regression.
  * This model stores the decision tree structure and parameters.
  *
- * @param topNode root node of decision tree structure
- * @param dTreeStrategy strategy of decision tree
+ * @param root root node of decision tree structure
+ * @param dt_para strategy of decision tree
  */
 class DTreeModel(
-    val topNode: Node,
-    val dTreeStrategy: DTreeStrategy) {
+    val root: Node,
+    val dt_para: DTreePara) {
 
   /**
    * Predict values for a single data point using the model trained.
    *
-   * @param features feature vector of a single data point
+   * @param fs feature vector of a single data point
    * @return predicted value from the trained model
    */
-  def predict(features: SparseVector[Double]): Double = {
-    var node = topNode
+  def predict(fs: SparseVector[Double]): Double = {
+    var node = root
     while (!node.isLeaf) {
-      if (features(node.featureID) < node.splitValue) {
+      if (fs(node.featureID) < node.splitValue) {
         node = node.leftNode.get
       } else {
         node = node.rightNode.get
@@ -42,17 +43,11 @@ class DTreeModel(
    * @return Array stored prediction
    */
   def predict(input: Array[LabeledPoint]): Array[Double] = {
-    val se = new SquaredError
+    val (pred, err) = computePredictAndError(input, 1.0)
 
-    val output = input.map { p =>
-      val pre = predict(p.features)
-      se :+= (pre, p.label)
-      pre
-    }
+    Log.log("INFO", s"predict done, with mean error = ${err}")
 
-    Log.log("INFO", s"predict done, with RMSE = ${se.getRMSE}")
-
-    output
+    pred
   }
 
   /**
@@ -62,6 +57,56 @@ class DTreeModel(
    */
   def save(path: String): Unit = {
     DTreeModel.save(path, this)
+  }
+
+  /**
+   * Predict values and get the mean error for the given data using the model trained and the model weight
+   *
+   * @param input Array of [[bda.local.ml.model.LabeledPoint]] represent true label and features of data points
+   * @param weight model weight
+   * @return Array stored prediction and the mean error
+   */
+  def computePredictAndError(
+      input: Array[LabeledPoint],
+      weight: Double): (Array[Double], Double) = {
+    val err_counter = dt_para.loss match {
+      case SquaredError => new SquaredErrorCounter()
+      case _ => throw new IllegalArgumentException(s"Did not recognize loss type: ${dt_para.loss}")
+    }
+
+    val pred = input.map { lp =>
+      val pred = predict(lp.features) * weight
+      err_counter :+= (pred, lp.label)
+      pred
+    }
+
+    (pred, err_counter.getMean)
+  }
+
+  /**
+   * Update the pre-predictions and get the mean error for the given data using the model trained and the model weight
+   *
+   * @param input Array of [[bda.local.ml.model.LabeledPoint]] represent true label and features of data points
+   * @param pre_pred pre-predictions
+   * @param weight model weight
+   * @return Array stored prediction and the mean error
+   */
+  def updatePredictAndError(
+      input: Array[LabeledPoint],
+      pre_pred: Array[Double],
+      weight: Double): (Array[Double], Double) = {
+    val err_counter = dt_para.loss match {
+      case SquaredError => new SquaredErrorCounter()
+      case _ => throw new IllegalArgumentException(s"Did not recognize loss type: ${dt_para.loss}")
+    }
+
+    val pred = input.zip(pre_pred).map { case (lp, pre_pred) =>
+      val pred = pre_pred + predict(lp.features) * weight
+      err_counter :+= (pred, lp.label)
+      pred
+    }
+
+    (pred, err_counter.getMean)
   }
 }
 

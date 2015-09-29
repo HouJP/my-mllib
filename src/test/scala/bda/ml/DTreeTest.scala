@@ -1,7 +1,7 @@
 package bda.ml
 
-import bda.local.ml.strategy.DTreeStrategy
-import bda.local.ml.{DTreeTrainer}
+import bda.local.ml.para.DTreePara
+import bda.local.ml.DTree
 import bda.local.ml.util.MLUtils
 
 object DTreeTest {
@@ -12,11 +12,9 @@ object DTreeTest {
     val train_points = MLUtils.loadLibSVMFile(train_path)
     val test_points = MLUtils.loadLibSVMFile(test_path)
 
-    val dTreeStrategy = DTreeStrategy.default
-    dTreeStrategy.maxDepth = 20
-    dTreeStrategy.minNodeSize = 20
+    val dt_para = DTreePara.default
 
-    val model = new DTreeTrainer(dTreeStrategy).fit(train_points)
+    val model = new DTree(dt_para).fit(train_points)
 
     model.predict(train_points)
     model.predict(test_points)

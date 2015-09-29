@@ -73,7 +73,7 @@ class Stat(
    *
    * @param value the true label of the instance which will be added
    */
-  def +:(value: Double): Unit = {
+  def +=:(value: Double): Unit = {
     update(1, value, value * value, -1, 0)
   }
 
@@ -82,7 +82,7 @@ class Stat(
    *
    * @param value the true label of the instance which will be added
    */
-  def :+(value: Double): Unit = {
+  def :+=(value: Double): Unit = {
     update(1, value, value * value, 0, 1)
   }
 
@@ -91,7 +91,7 @@ class Stat(
    *
    * @param value the true label of the instance which will be subtracted
    */
-  def -:(value: Double): Unit = {
+  def -=:(value: Double): Unit = {
     update(-1, -1 * value, -1 * value * value, 1, 0)
   }
 
@@ -100,7 +100,7 @@ class Stat(
    *
    * @param value the true label of the instance which will be subtracted
    */
-  def :-(value: Double): Unit = {
+  def :-=(value: Double): Unit = {
     update(-1, -1 * value, -1 * value * value, 0, -1)
   }
 }

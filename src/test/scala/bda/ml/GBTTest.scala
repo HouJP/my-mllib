@@ -1,7 +1,7 @@
 package bda.ml
 
-import bda.local.ml.strategy.{GBoostStrategy, DTreeStrategy}
-import bda.local.ml.{DTreeTrainer, GBoostTrainer}
+import bda.local.ml.para.{GBoostPara}
+import bda.local.ml.{GBoost}
 import bda.local.ml.util.MLUtils
 
 object GBTTest {
@@ -13,10 +13,11 @@ object GBTTest {
     val train_lp = MLUtils.loadLibSVMFile(train_path)
     val test_lp = MLUtils.loadLibSVMFile(test_path)
 
-    val gBoostStrategy = GBoostStrategy.default
+    val gb_para = GBoostPara.default
 
-    val gBoostModel = new GBoostTrainer(gBoostStrategy).fit(train_lp)
+    val gb_model = new GBoost(gb_para).fit(train_lp)
 
-    gBoostModel.predict(test_lp)
+    gb_model.predict(train_lp)
+    gb_model.predict(test_lp)
   }
 }

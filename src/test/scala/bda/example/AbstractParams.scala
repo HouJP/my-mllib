@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.examples.mllib
+package bda.local.examples
 
 import scala.reflect.runtime.universe._
 

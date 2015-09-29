@@ -28,10 +28,58 @@ TODO
 
 ###<a name="test">Algorithm Testing</a>
 
+#### GBoost
+
+* Enviroment
+	* CPU: 1.3 GHz Intel Core i5
+	* Memory: 4 GB 1600 MHz DDR3
+	
+* DataSet
+	* Name: cadata
+	* Rate: 70%-training, 30%-testing
+	
+* Results Table:
+	* xgboost
+		* Fixed-parameters: gamma = 0, max_delata_step = 0, subsample = 1, colsample_byree = 1, lambda = 1, alpha = 0, nthread = 10
+	* GBoost
+		* Fixed-parameters: none
+		
+| Algorithm | num_iter | eta | max_depth | min_child_weight | total_time | train_RMSE | test_RMSE |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| xgboost 	| 100 | 0.01 | 15 | 10 | 4s | 97536.96 | 102027.12 |
+| 			| 200 | 0.01 | 15 | 10 | 9s | 48573.12 | 58397.00 |
+| 			| 300 | 0.01 | 15 | 10 | 14s | 31399.54 | 49394.50 |
+| 			| 400 | 0.01 | 15 | 10 | 19s | 24620.25 | 48155.99 |
+| 			| 500 | 0.01 | 15 | 10 | 23s | 23296.80 | 47144.61 |
+| 			| 600 | 0.01 | 15 | 10 | 26s | 21310.44 | 48077.48 |
+| 			| 600 | 0.01 | 15 | 20 | 24s | 28383.57 | 47840.43 |
+| 			| 400 | 0.01 | 20 | 20 | 21s | 30126.81 | 48200.24 |
+| 			| 500 | 0.01 | 20 | 20 | 26s | 28251.16 | **46656.16** |
+| 			| 600 | 0.01 | 20 | 20 | 31s | 27059.08 | 46704.55 |
+|			| 700 | 0.01 | 20 | 20 | 35s | 25854.79 | 46895.51 |
+| 			| 600 | 0.01 | 21 | 20 | 27s | 27478.99 | 47756.24 |
+
+| Algorithm | num_iter | learn_rate | max_depth | min_node_size | ave_iter_cost_time | train_RMSE | test_RMSE |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
+| bda.local.ml.GBoost 	| 100 | 0.01 | 15 | 10 | 857ms | 46993.31 | 60005.90 |
+| 					 	| 200 | 0.01 | 15 | 10 | 757ms | 25740.15 | 49021.34 |
+| 					 	| 300 | 0.01 | 15 | 10 | 692ms | 20494.19 | 47727.48 |
+| 					 	| 400 | 0.01 | 15 | 10 | 871ms | 18215.08 | 47458.97 |
+| 					 	| 500 | 0.01 | 15 | 10 | 761ms | 16767.86 | 47326.49 |
+|						| 1000 | 0.01 | 15 | 10 | 798ms | 12343.36 | **47144.03** |
+|						| 100 | 0.01 | 15 | 20 | 913ms | 36081.40 | 60252.03 |
+|						| 100 | 0.01 | 20 | 20 | 1144ms | 37641.07 | 59462.60 |
+
+
 #### Decision Tree
 
-* DataSet: cadata
-* Rate: 70%-training, 30%-testing
+* Enviroment
+	* CPU: 1.3 GHz Intel Core i5
+	* Memory: 4 GB 1600 MHz DDR3
+	
+* DataSet
+	* Name: cadata
+	* Rate: 70%-training, 30%-testing
 
 | Algorithm | max_depth | min_samples_leaf | cost_time | train_RMSE | test_RMSE |
 | ---- | ---- | ---- | ---- | ---- | ---- |
@@ -60,8 +108,11 @@ TODO
 ****
 
 ###<a name="version">Version Updating</a>
+*	2015/09/29
+	*	use xgboost to generate baseline for performance evaluation
+
 *	2015/09/27
-	* implement gbdt algorithm
+	* 	implement gbdt algorithm
 
 *	2015/09/25
 	*	use sklearn.tree.DecisionTreeRegressor to generate baseline for performance evaluation

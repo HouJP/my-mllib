@@ -17,10 +17,10 @@ object MLUtils {
    * @return file content stored as an Array[String]
    */
   def loadFile(path: String): Array[String] = {
-    val content = collection.mutable.ArrayBuffer[String]()
-    Source.fromFile(path).getLines().foreach(content.append(_))
+    val c = collection.mutable.ArrayBuffer[String]()
+    Source.fromFile(path).getLines().foreach(c.append(_))
 
-    content.toArray
+    c.toArray
   }
 
   /**
@@ -37,10 +37,10 @@ object MLUtils {
         val items = line.split(' ')
         val label = items.head.toDouble
         val (indices, values) = items.tail.filter(_.nonEmpty).map { item =>
-          val indexAndValue = item.split(':')
-          val index = indexAndValue(0).toInt - 1 // Convert 1-based indices to 0-based.
-          val value = indexAndValue(1).toDouble
-          (index, value)
+          val ind_val = item.split(':')
+          val ind = ind_val(0).toInt - 1 // Convert 1-based indices to 0-based.
+          val value = ind_val(1).toDouble
+          (ind, value)
         }.unzip
         (label, indices.toArray, values.toArray)
       }

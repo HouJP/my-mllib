@@ -5,21 +5,21 @@ import bda.local.ml.model.Stat
 /**
  * Class for loss function of squared error.
  */
-class SquaredError {
+class SquaredErrorCounter extends LossCounter{
 
   /** sum of squared error */
-  var sumSE = 0.0
+  private var sum_e = 0.0
   /** num of instances */
-  var count = 0
+  private var count = 0
 
   /**
    * Method to add squared error for a new instance.
    *
-   * @param prediction predicted feature
+   * @param pre predicted feature
    * @param label true label
    */
-  def :+=(prediction: Double, label: Double): Unit = {
-    sumSE += SquaredError.computeError(prediction, label)
+  def :+=(pre: Double, label: Double): Unit = {
+    sum_e += SquaredErrorCalculator.computeError(pre, label)
     count += 1
   }
 
@@ -28,33 +28,33 @@ class SquaredError {
    *
    * @return RMSE value
    */
-  def getRMSE: Double = {
-    math.sqrt(sumSE / count)
+  def getMean: Double = {
+    math.sqrt(sum_e / count)
   }
 }
 
-object SquaredError extends Loss {
+object SquaredErrorCalculator extends LossCalculator {
 
   /**
    * Method to calculate gradient for squared error
    *
-   * @param prediction predicted feature
+   * @param pre predicted feature
    * @param label true label
    * @return gradient value
    */
-  override def gradient(prediction: Double, label: Double): Double = {
-    2.0 * (prediction - label)
+  override def gradient(pre: Double, label: Double): Double = {
+    2.0 * (pre - label)
   }
 
   /**
    * Method to calculate squared error for predicted feature
    *
-   * @param prediction predicted feature
+   * @param pre predicted feature
    * @param label true label
    * @return the error of the predicted feature
    */
-  override def computeError(prediction: Double, label: Double): Double = {
-    val err = prediction - label
+  override def computeError(pre: Double, label: Double): Double = {
+    val err = pre - label
     err * err
   }
 

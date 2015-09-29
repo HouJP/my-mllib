@@ -6,5 +6,4 @@ project/project/target/*
 submit.sh
 
 .DS_Store
-data/*
 

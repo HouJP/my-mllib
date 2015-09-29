@@ -14,7 +14,7 @@ class SquaredError(object):
 		self.__count += 1
 		return
 
-	def getRMSE(self):
+	def getMean(self):
 		return math.sqrt(self.__sumSE / self.__count)
 
 	@staticmethod

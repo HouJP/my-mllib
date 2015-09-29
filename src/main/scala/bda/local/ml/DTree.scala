@@ -1,16 +1,16 @@
 package bda.local.ml
 
-import bda.local.ml.model.{DTreeMetadata, LabeledPoint, DTreeModel, Stat, Node}
-import bda.local.ml.strategy.DTreeStrategy
+import bda.local.ml.model.{LabeledPoint, DTreeModel, Stat, Node}
+import bda.local.ml.para.DTreePara
 import bda.local.ml.util.Log
 import scala.collection.mutable
 
 /**
  * A class which implements a decision tree algorithm for classification and regression.
  *
- * @param dTreetrategy the configuration parameters for the decision tree algorithm
+ * @param dt_para the configuration parameters for the decision tree algorithm
  */
-class DTreeTrainer (private val dTreetrategy: DTreeStrategy) {
+class DTree (private val dt_para: DTreePara) {
 
   /**
    * Method to train a decision tree over a training data which represented as an array of [[bda.local.ml.model.LabeledPoint]]
@@ -19,48 +19,58 @@ class DTreeTrainer (private val dTreetrategy: DTreeStrategy) {
    * @return a [[bda.local.ml.model.DTreeModel]] instance which can be used for prediction
    */
   def fit(input: Array[LabeledPoint]): DTreeModel = {
-    val dTreeMetadata = DTreeMetadata.build(input, dTreetrategy)
+    val num_f = input(0).features.size
+    val num_d = input.length
 
-    val dataIndex = new Array[Int](dTreeMetadata.numData)
-    for (index <- 0 until dTreeMetadata.numData) {
-      dataIndex(index) = index
+    val index_d = new Array[Int](num_d)
+    for (ind <- 0 until num_d) {
+      index_d(ind) = ind
     } // zip with index
 
     // stat of the root
-    val leftIndex = 0
-    val rightIndex = dTreeMetadata.numData // topNode covers data from 0 until numData: [0, numData)
-    val count = rightIndex - leftIndex
+    val index_l = 0
+    val index_r = num_d // topNode covers data from 0 until numData: [0, numData)
+    val count = index_r - index_l
     var sum = 0.0
-    var sumSquares = 0.0
-    for (index <- leftIndex until rightIndex) {
+    var sum_squares = 0.0
+    for (index <- index_l until index_r) {
       val value = input(index).label
       sum += value
-      sumSquares += value * value
+      sum_squares += value * value
     }
-    val stat = new Stat(dTreetrategy.impurity, count, sum, sumSquares, leftIndex, rightIndex) // nodeinfo
+    val stat = new Stat(
+      dt_para.impurity,
+      count,
+      sum,
+      sum_squares,
+      index_l,
+      index_r) // nodeinfo
 
     // root of the decision tree
-    val predict = dTreetrategy.loss.predict(stat)
-    val topNode = Node.empty(nodeIndex = 1, nodeDep = 0, predict = predict)
+    val pre = dt_para.loss_calculator.predict(stat)
+    val root = Node.empty(nodeIndex = 1, nodeDep = 0, predict = pre)
 
-    val nodeQueue = new mutable.Queue[(Node, Stat)]
-    nodeQueue.enqueue((topNode, stat)) // topNode covers dataIndex [0, numData)
+    val que_node = new mutable.Queue[(Node, Stat)]
+    que_node.enqueue((root, stat)) // topNode covers dataIndex [0, numData)
 
-    while (nodeQueue.nonEmpty) {
-      DTreeTrainer.findBestSplit(input, dataIndex, nodeQueue, dTreeMetadata)
+    while (que_node.nonEmpty) {
+      findBestSplit(input, index_d, que_node, num_f)
     }
 
-    new DTreeModel(topNode, dTreetrategy)
+    new DTreeModel(root, dt_para)
   }
-}
 
-object DTreeTrainer {
-
-  def checkNode(node: Node, stat: Stat, dTreeMetadata: DTreeMetadata): Boolean = {
-    if (node.dep >= dTreeMetadata.dTreeStrategy.maxDepth) {
+  /**
+   * Check the node whether or not splits
+   * @param node the node waiting to split
+   * @param stat the node status
+   * @return whether or not splits
+   */
+  def checkNode(node: Node, stat: Stat): Boolean = {
+    if (node.dep >= dt_para.max_depth) {
       return false
     }
-    if (stat.count <= dTreeMetadata.dTreeStrategy.minNodeSize) {
+    if (stat.count <= dt_para.min_node_size) {
       return false
     }
     return true
@@ -70,106 +80,120 @@ object DTreeTrainer {
    * Find the best threshold to split the front node in the queue.
    *
    * @param input training data
-   * @param dataIndex the index array of the training data
-   * @param nodeQueue nodes queue which stored the nodes need to be splited
-   * @param dTreeMetadata training data metadata and the strategy of the decision tree
+   * @param index_d the index array of the training data
+   * @param que_node nodes queue which stored the nodes need to be splited
+   * @param num_f training data metadata and the strategy of the decision tree
    */
   def findBestSplit(
       input: Array[LabeledPoint],
-      dataIndex: Array[Int],
-      nodeQueue: mutable.Queue[(Node, Stat)],
-      dTreeMetadata: DTreeMetadata): Unit = {
+      index_d: Array[Int],
+      que_node: mutable.Queue[(Node, Stat)],
+      num_f: Int): Unit = {
 
-    val (node, stat) = nodeQueue.dequeue()
+    val (node, stat) = que_node.dequeue()
 
     // check node, split it if necessary
-    if (!checkNode(node, stat, dTreeMetadata)) {
+    if (!checkNode(node, stat)) {
       node.isLeaf = true
 
-//      Log.log("INFO", s"node_${node.id} stop split")
+      //Log.log("INFO", s"node_${node.id} stop split")
       return
     }
 
     // find the best split
-    var bestSplitValue = 0.0
-    var bestFeatureID = 0
-    var maxInfoGain = dTreeMetadata.dTreeStrategy.minInfoGain
-    var bestLeftStat = Stat.empty
-    var bestRightStat = Stat.empty
-    for (featureIndex <- 0 until dTreeMetadata.numFeatures) {
-      var aMaxInfoGain = maxInfoGain
-      var aBestSplitValue = 0.0
-      var aBestLeftStat: Stat = Stat.empty
-      var aBestRightStat: Stat = Stat.empty
+    var best_sp_v = 0.0 // best split value
+    var best_f_id = 0 // best feature id
+    var max_ig = dt_para.min_info_gain
+    var best_stat_l = Stat.empty
+    var best_stat_r = Stat.empty
+    for (featureIndex <- 0 until num_f) {
+      var a_best_sp_v = 0.0
+      var a_max_ig = max_ig
+      var a_best_stat_l: Stat = Stat.empty
+      var a_best_stat_r: Stat = Stat.empty
 
-      var leftStat = new Stat(dTreeMetadata.dTreeStrategy.impurity, 0, 0, 0, stat.leftIndex, stat.leftIndex)
-      var rightStat = new Stat(dTreeMetadata.dTreeStrategy.impurity, stat.count, stat.sum, stat.sumSquares, stat.leftIndex, stat.rightIndex)
+      val stat_l = new Stat(
+        dt_para.impurity,
+        0,
+        0,
+        0,
+        stat.leftIndex,
+        stat.leftIndex)
+      val stat_r = new Stat(
+        dt_para.impurity,
+        stat.count,
+        stat.sum,
+        stat.sumSquares,
+        stat.leftIndex,
+        stat.rightIndex)
 
-      val fValue = new Array[Double](stat.count)
-      val tmpIndex = new Array[Int](stat.count)
-      for (dataOffset <- 0 until stat.count) {
-        fValue(dataOffset) = input(dataIndex(stat.leftIndex + dataOffset)).features(featureIndex)
-        tmpIndex(dataOffset) = dataIndex(stat.leftIndex + dataOffset)
+      val f_v = new Array[Double](stat.count)
+      val index_tmp = new Array[Int](stat.count)
+      for (offset <- 0 until stat.count) {
+        f_v(offset) = input(index_d(stat.leftIndex + offset)).features(featureIndex)
+        index_tmp(offset) = index_d(stat.leftIndex + offset)
       }
-      val orderedArr = tmpIndex.zip(fValue).sortBy(_._2)
+      val ordered = index_tmp.zip(f_v).sortBy(_._2)
 
-      for (dataOffset <- 0 until (stat.count - 1)) {
-        val dataValue = input(orderedArr(dataOffset)._1).label
-        leftStat :+ dataValue
-        dataValue -: rightStat
+      for (offset <- 0 until (stat.count - 1)) {
+        val dataValue = input(ordered(offset)._1).label
+        stat_l :+= dataValue
+        dataValue -=: stat_r
 
-        if (orderedArr(dataOffset + 1)._2 > orderedArr(dataOffset)._2) {
-          val splitValue = (orderedArr(dataOffset + 1)._2 + orderedArr(dataOffset)._2) / 2
-          val infoGain = stat.impurity - (1.0 * leftStat.count / stat.count) * leftStat.impurity - (1.0 * rightStat.count / stat.count) * rightStat.impurity
+        if (ordered(offset + 1)._2 > ordered(offset)._2) {
+          val sp_v = (ordered(offset + 1)._2 + ordered(offset)._2) / 2
+          val ig = stat.impurity -
+            (1.0 * stat_l.count / stat.count) * stat_l.impurity -
+            (1.0 * stat_r.count / stat.count) * stat_r.impurity
 
-          if (infoGain > aMaxInfoGain) {
-            aMaxInfoGain = infoGain
-            aBestSplitValue = splitValue
-            aBestLeftStat.copy(leftStat)
-            aBestRightStat.copy(rightStat)
+          if (ig > a_max_ig) {
+            a_max_ig = ig
+            a_best_sp_v = sp_v
+            a_best_stat_l.copy(stat_l)
+            a_best_stat_r.copy(stat_r)
           }
         }
       }
 
-      if (aMaxInfoGain > maxInfoGain) {
-        maxInfoGain = aMaxInfoGain
-        bestSplitValue = aBestSplitValue
-        bestFeatureID = featureIndex
-        bestLeftStat.copy(aBestLeftStat)
-        bestRightStat.copy(aBestRightStat)
+      if (a_max_ig > max_ig) {
+        max_ig = a_max_ig
+        best_sp_v = a_best_sp_v
+        best_f_id = featureIndex
+        best_stat_l.copy(a_best_stat_l)
+        best_stat_r.copy(a_best_stat_r)
 
         for (dataOffset <- 0 until stat.count) {
-          dataIndex(stat.leftIndex + dataOffset) = orderedArr(dataOffset)._1
+          index_d(stat.leftIndex + dataOffset) = ordered(dataOffset)._1
         }
       }
     }
 
     // add leftChild and rightChild to the queue
-    if (maxInfoGain > dTreeMetadata.dTreeStrategy.minInfoGain) {
-      val leftIndex = Node.leftChildIndex(node.id)
-      val rightIndex = Node.rightChildIndex(node.id)
-      val leftPre = dTreeMetadata.dTreeStrategy.loss.predict(bestLeftStat)
-      val rightPre = dTreeMetadata.dTreeStrategy.loss.predict(bestRightStat)
-      val leftNode = Node.empty(leftIndex, node.dep + 1, leftPre)
-      val rightNode = Node.empty(rightIndex, node.dep + 1, rightPre)
+    if (max_ig > dt_para.min_info_gain) {
+      val ind_l = Node.leftChildIndex(node.id)
+      val ind_r = Node.rightChildIndex(node.id)
+      val pre_l = dt_para.loss_calculator.predict(best_stat_l)
+      val pre_r = dt_para.loss_calculator.predict(best_stat_r)
+      val node_l = Node.empty(ind_l, node.dep + 1, pre_l)
+      val node_r = Node.empty(ind_r, node.dep + 1, pre_r)
 
-      node.splitValue = bestSplitValue
-      node.featureID = bestFeatureID
-      node.leftNode = Option(leftNode)
-      node.rightNode = Option(rightNode)
+      node.splitValue = best_sp_v
+      node.featureID = best_f_id
+      node.leftNode = Option(node_l)
+      node.rightNode = Option(node_r)
 
-      nodeQueue.enqueue((leftNode, bestLeftStat))
-      nodeQueue.enqueue((rightNode, bestRightStat))
+      que_node.enqueue((node_l, best_stat_l))
+      que_node.enqueue((node_r, best_stat_r))
 
-//      Log.log("INFO", s"node_${node.id} split into node_${leftNode.id} and node_${rightNode.id}, " +
-//        s"with splitValue = ${node.splitValue} and featureID = ${node.featureID}")
-//      Log.log("INFO", s"\t\tnode_${node.id}'s stat: $stat")
-//      Log.log("INFO", s"\t\tnode_${leftNode.id}'s stat: $bestLeftStat")
-//      Log.log("INFO", s"\t\tnode_${rightNode.id}'s stat: $bestRightStat")
+      //Log.log("INFO", s"node_${node.id} split into node_${leftNode.id} and node_${rightNode.id}, " +
+      //  s"with splitValue = ${node.splitValue} and featureID = ${node.featureID}")
+      //Log.log("INFO", s"\t\tnode_${node.id}'s stat: $stat")
+      //Log.log("INFO", s"\t\tnode_${leftNode.id}'s stat: $bestLeftStat")
+      //Log.log("INFO", s"\t\tnode_${rightNode.id}'s stat: $bestRightStat")
     } else {
       node.isLeaf = true
 
-//      Log.log("INFO", s"node_${node.id} stop split, with predict = ${node.predict}")
+      //Log.log("INFO", s"node_${node.id} stop split, with predict = ${node.predict}")
     }
   }
 }
