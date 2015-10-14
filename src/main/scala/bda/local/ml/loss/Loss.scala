@@ -23,7 +23,7 @@ abstract class LossCounter {
 /**
  * Trait for loss functions for the gradient boosting algorithm
  */
-trait LossCalculator {
+trait LossCalculator extends Serializable {
 
   /**
    * Method to calculate the gradient for the gradient boosting algorithm

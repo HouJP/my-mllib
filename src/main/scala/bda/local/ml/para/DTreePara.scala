@@ -20,7 +20,7 @@ class DTreePara(
     val loss: Loss = Loss.fromString("SquaredError"),
     val min_node_size: Int = 15,
     val max_depth: Int = 10,
-    val min_info_gain: Double = 0.0) {
+    val min_info_gain: Double = 0.0) extends Serializable {
 
   val loss_calculator = loss match {
     case SquaredError => SquaredErrorCalculator

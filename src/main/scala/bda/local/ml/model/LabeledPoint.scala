@@ -8,7 +8,7 @@ import bda.common.linalg.immutable.SparseVector
  * @param label label of the data point
  * @param features features of the data point
  */
-case class LabeledPoint(label: Double, features: SparseVector[Double]) {
+case class LabeledPoint(label: Double, features: SparseVector[Double]) extends Serializable {
   override  def toString: String = {
     s"($label,$features)"
   }

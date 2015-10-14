@@ -10,7 +10,7 @@ package bda.local.ml.model
 class Node(
     val id: Int,
     val dep: Int,
-    val predict: Double) {
+    val predict: Double) extends Serializable {
 
   /** flag to show whether is a leaf-node */
   var isLeaf = false

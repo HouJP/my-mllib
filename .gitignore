@@ -1,7 +1,13 @@
 .idea/*
+
 target/*
+
 project/target/*
 project/project/target/*
+
+bin/upload.sh
+
+out/*
 
 submit.sh
 

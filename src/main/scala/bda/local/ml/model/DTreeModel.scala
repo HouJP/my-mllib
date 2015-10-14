@@ -1,7 +1,7 @@
 package bda.local.ml.model
 
 import bda.common.linalg.immutable.SparseVector
-import bda.local.ml.loss.{SquaredErrorCounter, SquaredErrorCalculator}
+import bda.local.ml.loss.{SquaredErrorCounter}
 import bda.local.ml.para.DTreePara
 import bda.local.ml.util.Log
 import bda.local.ml.para.Loss._
@@ -15,7 +15,7 @@ import bda.local.ml.para.Loss._
  */
 class DTreeModel(
     val root: Node,
-    val dt_para: DTreePara) {
+    val dt_para: DTreePara) extends Serializable {
 
   /**
    * Predict values for a single data point using the model trained.
