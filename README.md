@@ -108,11 +108,15 @@ TODO
 ****
 
 ###<a name="version">Version Updating</a>
+*	2015/10/14
+	*	implement gbdt algorithm running on spark
+	*	issues
+		*	meet StackOverflowError when number of iteration is too large.
 *	2015/09/29
 	*	use xgboost to generate baseline for performance evaluation
 
 *	2015/09/27
-	* 	implement gbdt algorithm
+	* 	implement gbdt algorithm running on local
 
 *	2015/09/25
 	*	use sklearn.tree.DecisionTreeRegressor to generate baseline for performance evaluation
@@ -120,7 +124,7 @@ TODO
 
 *	2015/09/23
 	*	implementations
-		*	implement decision tree which can be used to rain and predict
+		*	implement decision tree which can be used to rain and predict and running on local
 	*	issues
 		* 	only for regression
 		*	model can not be saved	
