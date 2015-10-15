@@ -41,8 +41,10 @@ TODO
 * Results Table:
 	* xgboost
 		* Fixed-parameters: gamma = 0, max_delata_step = 0, subsample = 1, colsample_byree = 1, lambda = 1, alpha = 0, nthread = 10
-	* GBoost
+	* bda.local.ml.GBoost
 		* Fixed-parameters: none
+	* bda.spark.ml.GBoost
+		* Fixed-parameters: data_sample_rate = 0.2, max_data_sample = 10000
 		
 | Algorithm | num_iter | eta | max_depth | min_child_weight | total_time | train_RMSE | test_RMSE |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
