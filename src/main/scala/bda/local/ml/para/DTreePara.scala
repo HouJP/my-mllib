@@ -1,6 +1,7 @@
 package bda.local.ml.para
 
-import bda.local.ml.impurity.{Variance, Impurity}
+import bda.local.ml.para.Impurity._
+import bda.local.ml.impurity.VarianceCalculator
 import bda.local.ml.loss.{LossCounter, SquaredErrorCalculator, LossCalculator}
 import bda.local.ml.para.Loss.{Loss, SquaredError}
 
@@ -9,7 +10,7 @@ import scala.beans.BeanProperty
 /**
  * Class of strategy used for a decision tree.
  *
- * @param impurity information calculator [[bda.local.ml.impurity.Impurity]]
+ * @param impurity information calculator [[bda.local.ml.para.Impurity]]
  * @param loss loss type [[bda.local.ml.para.Loss]]
  * @param min_node_size minimum size of nodes in the decision tree
  * @param max_depth maximum depth of nodes in the decision tree
@@ -17,14 +18,19 @@ import scala.beans.BeanProperty
  */
 class DTreePara(
     val impurity: Impurity = Variance,
-    val loss: Loss = Loss.fromString("SquaredError"),
+    val loss: Loss = SquaredError,
     val min_node_size: Int = 15,
     val max_depth: Int = 10,
     val min_info_gain: Double = 0.0) extends Serializable {
 
+  val impurity_calculator = impurity match {
+    case Variance => VarianceCalculator
+    case _ => throw new IllegalAccessException(s"Did not recognize impurity type: $impurity")
+  }
+
   val loss_calculator = loss match {
     case SquaredError => SquaredErrorCalculator
-    case _ => throw new IllegalArgumentException(s"Did not recognize loss type $SquaredError")
+    case _ => throw new IllegalArgumentException(s"Did not recognize loss type: $loss")
   }
 }
 

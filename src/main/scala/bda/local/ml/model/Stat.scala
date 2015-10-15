@@ -1,11 +1,11 @@
 package bda.local.ml.model
 
-import bda.local.ml.impurity.{Variance, Impurity}
+import bda.local.ml.impurity.{ImpurityCalculator, VarianceCalculator}
 
 /**
  * Class of status of the node in a tree.
  *
- * @param impurityCalculator impurity calculator [[bda.local.ml.impurity.Impurity]]
+ * @param impurityCalculator impurity calculator [[bda.local.ml.impurity.ImpurityCalculator]]
  * @param count number of instances the node has
  * @param sum summation of labels of instances the node has
  * @param sumSquares summation of squares of labels of instances the node has
@@ -13,7 +13,7 @@ import bda.local.ml.impurity.{Variance, Impurity}
  * @param rightIndex next id of rightmost instances the node has
  */
 class Stat(
-    var impurityCalculator: Impurity,
+    var impurityCalculator: ImpurityCalculator,
     var count: Int,
     var sum: Double,
     var sumSquares: Double,
@@ -113,6 +113,6 @@ object Stat {
    * @return a [[Stat]] instance
    */
   def empty = {
-    new Stat(Variance, 0, 0, 0, 0, 0)
+    new Stat(VarianceCalculator, 0, 0, 0, 0, 0)
   }
 }

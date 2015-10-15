@@ -3,7 +3,7 @@ package bda.local.ml.impurity
 /**
  * Class for calculating variance during regression
  */
-object Variance extends  Impurity {
+object VarianceCalculator extends  ImpurityCalculator {
 
   /**
    * variance calculation

@@ -39,7 +39,7 @@ class DTree (private val dt_para: DTreePara) {
       sum_squares += value * value
     }
     val stat = new Stat(
-      dt_para.impurity,
+      dt_para.impurity_calculator,
       count,
       sum,
       sum_squares,
@@ -113,14 +113,14 @@ class DTree (private val dt_para: DTreePara) {
       var a_best_stat_r: Stat = Stat.empty
 
       val stat_l = new Stat(
-        dt_para.impurity,
+        dt_para.impurity_calculator,
         0,
         0,
         0,
         stat.leftIndex,
         stat.leftIndex)
       val stat_r = new Stat(
-        dt_para.impurity,
+        dt_para.impurity_calculator,
         stat.count,
         stat.sum,
         stat.sumSquares,

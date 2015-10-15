@@ -6,6 +6,7 @@ import bda.spark.ml.para.GBoostPara
 import bda.local.ml.model.{DTreeModel, LabeledPoint}
 import bda.local.ml.util.Log
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import scala.util.Random
 
 /**
@@ -36,7 +37,7 @@ class GBoost(val gb_para: GBoostPara) {
 
     // persist input RDD for reusing
     input.persist()
-    //input.foreachPartition(_ => Unit)
+    input.count()
 
     var cost_time = 0.0
     var cost_count = 0
@@ -52,7 +53,8 @@ class GBoost(val gb_para: GBoostPara) {
 
     // compute prediction and error
     var pred_err = GBoostModel.computePredictAndError(input, learn_rate, wl0, loss_calculator).persist()
-    //pred_err.foreachPartition(_ => Unit)
+    pred_err.checkpoint()
+    pred_err.count()
 
     // compute mean error
     var min_err = pred_err.values.mean()
@@ -80,7 +82,10 @@ class GBoost(val gb_para: GBoostPara) {
       // compute prediction and error
       val pre_pred_err = pred_err
       pred_err = GBoostModel.updatePredictAndError(input, pre_pred_err, learn_rate, wl, loss_calculator).persist()
-      //pred_err.foreachPartition(_ => Unit)
+      if (iter % 20 == 0) {
+        pred_err.checkpoint()
+      }
+      pred_err.count()
       pre_pred_err.unpersist()
 
       // compute mean error

@@ -20,7 +20,7 @@ class GBoostPara (
     val learn_rate: Double = 0.02,
     val loss: Loss = SquaredError,
     val min_step: Double = 1e-5,
-    val data_sample_rate: Double = 0.3,
+    val data_sample_rate: Double = 0.2,
     val max_data_sample: Int = 10000) extends Serializable {
 
   val loss_calculator = loss match {

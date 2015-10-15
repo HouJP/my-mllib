@@ -9,6 +9,7 @@ libraryDependencies += "org.apache.spark" %% "spark-mllib" % "1.5.0"
 libraryDependencies += "com.github.scopt" %% "scopt" % "3.3.0"
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.2.1" % "test"
 
+
 resolvers += Resolver.sonatypeRepo("public")
 
 assemblyMergeStrategy in assembly := {

@@ -3,7 +3,7 @@ package bda.local.ml.impurity
 /**
  * Trait for calculate information gain.
  */
-trait  Impurity extends Serializable {
+trait  ImpurityCalculator extends Serializable {
 
   /**
    * Calculate information for regression
