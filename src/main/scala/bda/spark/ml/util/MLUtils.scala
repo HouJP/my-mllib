@@ -21,7 +21,7 @@ object MLUtils {
   def loadLibSVMFile(
       sc: SparkContext,
       path: String): RDD[LabeledPoint] = {
-    val parsed = sc.textFile(path)
+    val parsed = sc.textFile(path, sc.defaultMinPartitions)
       .map(_.trim)
       .filter(line => !(line.isEmpty || line.startsWith("#")))
       .map { line =>

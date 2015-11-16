@@ -9,6 +9,8 @@ bin/upload.sh
 
 out/*
 
+data/*
+
 submit.sh
 
 .DS_Store

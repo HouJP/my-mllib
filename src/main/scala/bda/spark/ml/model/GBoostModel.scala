@@ -1,8 +1,8 @@
 package bda.spark.ml.model
 
 import bda.common.linalg.immutable.SparseVector
-import bda.local.ml.loss.LossCalculator
-import bda.local.ml.model.{DTreeModel, LabeledPoint}
+import bda.spark.ml.loss.LossCalculator
+import bda.local.ml.model.LabeledPoint
 import bda.spark.ml.para.GBoostPara
 import org.apache.spark.rdd.RDD
 import bda.local.ml.util.Log
@@ -25,7 +25,7 @@ class GBoostModel(
    */
   def predict(fs: SparseVector[Double]): Double = {
     val preds = wk_learners.map(_.predict(fs))
-    preds.map(_ * gb_para.learn_rate).sum
+    preds.map(_ * gb_para.learn_rate).sum + wk_learners(0).predict(fs) * (1 - gb_para.learn_rate)
   }
 
   /**
@@ -69,7 +69,7 @@ object GBoostModel {
       dt_model: DTreeModel,
       loss: LossCalculator): RDD[(Double, Double)] = {
     data.map { lp =>
-      val pred = dt_model.predict(lp.features) * weight
+      val pred = dt_model.predict(lp.features) //* weight
       val err = loss.computeError(lp.label, pred)
       (pred, err)
     }

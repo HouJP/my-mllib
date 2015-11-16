@@ -1,0 +1,1331 @@
+#LyX 2.1 created this file. For more info see http://www.lyx.org/
+\lyxformat 474
+\begin_document
+\begin_header
+\textclass ctex-article
+\use_default_options true
+\begin_modules
+algorithm2e
+\end_modules
+\maintain_unincluded_children false
+\language chinese-simplified
+\language_package default
+\inputencoding utf8
+\fontencoding global
+\font_roman default
+\font_sans default
+\font_typewriter default
+\font_math auto
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100
+\font_tt_scale 100
+\font_cjk bsmi
+\graphics default
+\default_output_format pdf4
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref true
+\pdf_bookmarks true
+\pdf_bookmarksnumbered true
+\pdf_bookmarksopen true
+\pdf_bookmarksopenlevel 1
+\pdf_breaklinks false
+\pdf_pdfborder false
+\pdf_colorlinks false
+\pdf_backref false
+\pdf_pdfusetitle true
+\papersize a4paper
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 2cm
+\topmargin 2cm
+\rightmargin 2cm
+\bottommargin 2cm
+\headsep 2cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+NMF算法 
+\end_layout
+
+\begin_layout Section
+NMF基础
+\end_layout
+
+\begin_layout Subsection
+问题定义
+\end_layout
+
+\begin_layout Standard
+给定一个非负样本矩阵（如user-item打分矩阵） 
+\begin_inset Formula $\boldsymbol{R}\in\mathbb{R}_{+}^{M\times N}$
+\end_inset
+
+, 我们求解两个非负低秩矩阵 
+\begin_inset Formula $W\in\mathbb{R}_{+}^{M\times K}$
+\end_inset
+
+ 和 
+\begin_inset Formula $\boldsymbol{H}\in\mathbb{R}_{+}^{N\times K}$
+\end_inset
+
+ 最小化:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{eqnarray*}
+\mathrm{argmin}_{W,H}L(\boldsymbol{W},\boldsymbol{H}) & = & \frac{1}{2}\left\Vert \boldsymbol{R}-\boldsymbol{W}\boldsymbol{H}^{T}\right\Vert _{F}^{2}+\frac{\lambda}{2}(\left\Vert \boldsymbol{W}\right\Vert _{F}^{2}+\left\Vert \boldsymbol{H}\right\Vert _{F}^{2})
+\end{eqnarray*}
+
+\end_inset
+
+或:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{eqnarray*}
+\mathrm{argmin}_{W,H}L(\boldsymbol{W},\boldsymbol{H}) & =\frac{1}{2} & \sum_{(i,j)\in\boldsymbol{R}}\left(r_{i,j}-\boldsymbol{w}_{i}\boldsymbol{h}_{j}^{T}\right)^{2}+\frac{\lambda}{2}(\left\Vert \boldsymbol{W}\right\Vert _{F}^{2}+\left\Vert \boldsymbol{H}\right\Vert _{F}^{2})
+\end{eqnarray*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+NMF的优化求解
+\end_layout
+
+\begin_layout Subsubsection
+梯度下降求解(Gradient Descent)
+\end_layout
+
+\begin_layout Standard
+计算
+\begin_inset Formula $\boldsymbol{W}$
+\end_inset
+
+和
+\begin_inset Formula $\boldsymbol{H}$
+\end_inset
+
+的梯度:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\frac{\delta L}{\delta\boldsymbol{W}}=-\left(\boldsymbol{R}-\boldsymbol{W}\boldsymbol{H}^{T}\right)\boldsymbol{H}+\lambda\boldsymbol{W}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\frac{\delta L}{\delta\boldsymbol{H}}=-\left(\boldsymbol{R}-\boldsymbol{W}\boldsymbol{H}^{T}\right)^{T}\boldsymbol{W}+\lambda\boldsymbol{H}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+或按行写成：
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\frac{\delta L}{\delta\boldsymbol{w}_{i}}=-\sum_{j}\left(r_{i,j}-\boldsymbol{w}_{i}\boldsymbol{h}_{j}^{T}\right)\boldsymbol{h}_{j}+\lambda\boldsymbol{w}_{i}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\frac{\delta L}{\delta\boldsymbol{h}_{j}}=-\sum_{i}\left(r_{i,j}-\boldsymbol{w}_{u}\boldsymbol{h}_{i}^{T}\right)\boldsymbol{w}_{i}+\lambda\boldsymbol{h}_{j}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+然后在每次迭代过程中，依次更新
+\begin_inset Formula $\boldsymbol{W}$
+\end_inset
+
+和矩阵
+\begin_inset Formula $\boldsymbol{H}$
+\end_inset
+
+。令 
+\begin_inset Formula $\boldsymbol{E}=\boldsymbol{R}-\boldsymbol{W}\boldsymbol{H}^{T}$
+\end_inset
+
+表示残差矩阵，其中
+\begin_inset Formula $e_{i,j}=r_{i,j}-\boldsymbol{w}_{i}\boldsymbol{h}_{j}^{T}$
+\end_inset
+
+。GD算法更新规则如下：
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{W} & \leftarrow[(1-\eta\lambda)\boldsymbol{W}+\eta\boldsymbol{E}\boldsymbol{H}]_{+}\\
+\boldsymbol{H} & \leftarrow[(1-\eta\lambda)\boldsymbol{H}+\eta\boldsymbol{E}^{T}\boldsymbol{W}]_{+}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+这里
+\begin_inset Formula $[x]_{+}=\max(x,0)$
+\end_inset
+
+。如果按行写，就是:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{w}_{i} & \leftarrow[(1-\eta\lambda)\boldsymbol{w}_{i}+\eta\sum_{j}e_{i,j}\boldsymbol{h}_{j}]_{+}\label{eq:gd_wi}\\
+\boldsymbol{h}_{j} & \leftarrow[(1-\eta\lambda)\boldsymbol{h}_{j}+\eta\sum_{i}e_{i,j}\boldsymbol{w}_{i}]_{+}\label{eq:gd_hj}
+\end{align}
+
+\end_inset
+
+ 
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float algorithm
+placement H
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Box Boxed
+position "t"
+hor_pos "c"
+has_inner_box 1
+inner_pos "t"
+use_parbox 0
+use_makebox 0
+width "100col%"
+special "none"
+height "1in"
+height_special "totalheight"
+status open
+
+\begin_layout Plain Layout
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+KwIn{$
+\backslash
+mathbb{R}=
+\backslash
+{r_{i,j}
+\backslash
+}, 
+\backslash
+eta, 
+\backslash
+lambda$} 
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+KwOut{$
+\backslash
+boldsymbol{W}$ and $
+\backslash
+boldsymbol{H}$}
+\end_layout
+
+\begin_layout Plain Layout
+
+Randomly initialize $
+\backslash
+boldsymbol{W}$ and $
+\backslash
+boldsymbol{H}$
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+While{not converge}{
+\end_layout
+
+\begin_layout Plain Layout
+
+    fix $
+\backslash
+boldsymbol{W}$, update $
+\backslash
+boldsymbol{H}$ by Eq.(
+\backslash
+ref{eq:gd_wi})
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+	fix $
+\backslash
+boldsymbol{H}$, update $
+\backslash
+boldsymbol{W}$ by Eq.(
+\backslash
+ref{eq:gd_hj})
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+NMF的梯度下降优化算法
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsubsection
+随机梯度下降（Stochastic Gradient Descent）
+\end_layout
+
+\begin_layout Standard
+SGD对每个样本
+\begin_inset Formula $r_{i,j}$
+\end_inset
+
+计算相关参数（
+\begin_inset Formula $\boldsymbol{w}_{i}$
+\end_inset
+
+和
+\begin_inset Formula $\boldsymbol{h}_{j}$
+\end_inset
+
+）的梯度，并更新该参数:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{w}_{i} & \leftarrow[(1-\eta\lambda)\boldsymbol{w}_{i}+\eta e_{i,j}\boldsymbol{h}_{j}]_{+}\label{eq:sgd_wi}\\
+\boldsymbol{h}_{j} & \leftarrow[(1-\eta\lambda)\boldsymbol{h}_{j}+\eta e_{i,j}\boldsymbol{w}_{i}]_{+}\label{eq:sgd_hj}
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+注意SGD(式
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:sgd_wi"
+
+\end_inset
+
+和
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:sgd_hj"
+
+\end_inset
+
+)和GD(式
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:gd_wi"
+
+\end_inset
+
+和
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:gd_hj"
+
+\end_inset
+
+)的区别在于是SGD是逐个样本来更新参数的，而GD是把所有样本的梯度累积，再更新参数。直观的理解：假设有一堆人捆绑在一块去某个目的地，SGD是一个挨一个小碎步前
+进；GD则是大家先统一意见，再统一迈一步。
+\end_layout
+
+\begin_layout Standard
+注意：
+\end_layout
+
+\begin_layout Itemize
+GD的步长应比SGD小很多，因为其累积值会非常大（步长的值依赖于累积值的个数n）。
+\end_layout
+
+\begin_layout Itemize
+SGD开始改进快，但后续迭代收敛慢
+\end_layout
+
+\begin_layout Itemize
+GD开始改进慢，但后续迭代收敛快
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float algorithm
+placement H
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Box Boxed
+position "t"
+hor_pos "c"
+has_inner_box 1
+inner_pos "t"
+use_parbox 0
+use_makebox 0
+width "100col%"
+special "none"
+height "1in"
+height_special "totalheight"
+status open
+
+\begin_layout Plain Layout
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+KwIn{$
+\backslash
+mathbb{R}=
+\backslash
+{r_{i,j}
+\backslash
+}, 
+\backslash
+eta, 
+\backslash
+lambda$} 
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+KwOut{$
+\backslash
+boldsymbol{W}$ and $
+\backslash
+boldsymbol{H}$}
+\end_layout
+
+\begin_layout Plain Layout
+
+Randomly initialize $
+\backslash
+boldsymbol{W}$ and $
+\backslash
+boldsymbol{H}$
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+While{not converge}{
+\end_layout
+
+\begin_layout Plain Layout
+
+    Sample $r_{i,j}
+\backslash
+in 
+\backslash
+mathbb{R}$
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+	Update $
+\backslash
+boldsymbol{w}_{i},
+\backslash
+boldsymbol{h}_{j}$ by Eqs.(
+\backslash
+ref{eq:sgd_wi}-
+\backslash
+ref{eq:sgd_hj})
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+NMF的SGD算法
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsubsection
+交替最小二乘算法(Alternative Least Square)
+\end_layout
+
+\begin_layout Standard
+ALS算法也是每次固定一个参数，然后求解另一个。如果不考虑参数的非负约束，在固定
+\family roman
+\series medium
+\shape up
+\size normal
+\emph off
+\bar no
+\strikeout off
+\uuline off
+\uwave off
+\noun off
+\color none
+
+\begin_inset Formula $\boldsymbol{H}$
+\end_inset
+
+求解最优的
+\begin_inset Formula $\boldsymbol{W}$
+\end_inset
+
+时，实际上是一个最小二乘问题：
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{eqnarray*}
+\mathrm{argmin}_{W}L(\boldsymbol{W}) & = & \frac{1}{2}\left\Vert \boldsymbol{R}-\boldsymbol{W}\boldsymbol{H}^{T}\right\Vert _{F}^{2}+\frac{\lambda}{2}\left\Vert \boldsymbol{W}\right\Vert _{F}^{2}
+\end{eqnarray*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+该问题可直接得到最优解：
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{W} & \leftarrow\boldsymbol{R}\boldsymbol{H}(\boldsymbol{H}^{T}\boldsymbol{H}+\lambda\boldsymbol{I})^{-1}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+类似的，在固定
+\family roman
+\series medium
+\shape up
+\size normal
+\emph off
+\bar no
+\strikeout off
+\uuline off
+\uwave off
+\noun off
+\color none
+
+\begin_inset Formula $\boldsymbol{W}$
+\end_inset
+
+求解最优的
+\begin_inset Formula $\boldsymbol{H}$
+\end_inset
+
+时，我们有：
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{H} & \leftarrow\boldsymbol{R}^{T}\boldsymbol{W}\left(\boldsymbol{W}^{T}\boldsymbol{W}+\lambda\boldsymbol{I}\right)^{-1}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+再加上参数的非负约束，我们可以得到每一步的一个近似解：
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{W} & \leftarrow[\boldsymbol{R}\boldsymbol{H}(\boldsymbol{H}^{T}\boldsymbol{H}+\lambda\boldsymbol{I})^{-1}]_{+}\\
+\boldsymbol{H} & \leftarrow[\boldsymbol{R}^{T}\boldsymbol{W}\left(\boldsymbol{W}^{T}\boldsymbol{W}+\lambda\boldsymbol{I}\right)^{-1}]_{+}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+或者按行写成:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{w}_{i} & \leftarrow[(\boldsymbol{H}^{T}\boldsymbol{H}+\lambda\boldsymbol{I})^{-1}\sum_{j}r_{i,j}\boldsymbol{h}_{j}]_{+}\label{eq:als_wi}\\
+\boldsymbol{h}_{j} & \leftarrow[\left(\boldsymbol{W}^{T}\boldsymbol{W}+\lambda\boldsymbol{I}\right)^{-1}\sum_{i}r_{i,j}\boldsymbol{w}_{i}]_{+}\label{eq:als_hj}
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float algorithm
+placement H
+wide false
+sideways false
+status collapsed
+
+\begin_layout Plain Layout
+\begin_inset Box Boxed
+position "t"
+hor_pos "c"
+has_inner_box 1
+inner_pos "t"
+use_parbox 0
+use_makebox 0
+width "100col%"
+special "none"
+height "1in"
+height_special "totalheight"
+status open
+
+\begin_layout Plain Layout
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+KwIn{$
+\backslash
+mathbb{R}=
+\backslash
+{r_{i,j}
+\backslash
+}, 
+\backslash
+eta, 
+\backslash
+lambda$} 
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+KwOut{$
+\backslash
+boldsymbol{W}$ and $
+\backslash
+boldsymbol{H}$}
+\end_layout
+
+\begin_layout Plain Layout
+
+Randomly initialize $
+\backslash
+boldsymbol{W}$ and $
+\backslash
+boldsymbol{H}$
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+While{not converge}{
+\end_layout
+
+\begin_layout Plain Layout
+
+    Fix $
+\backslash
+boldsymbol{H}$, update $
+\backslash
+boldsymbol{W}$ by Eq.(
+\backslash
+ref{eq:als_wi})
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+	Fix $
+\backslash
+boldsymbol{W}$, update $
+\backslash
+boldsymbol{H}$ by Eq.(
+\backslash
+ref{eq:als_hj})
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+NMF的ALS算法
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsubsection
+LBFGS
+\end_layout
+
+\begin_layout Standard
+TODO
+\end_layout
+
+\begin_layout Section
+NMF分布式实现
+\end_layout
+
+\begin_layout Standard
+目前采用Gradient descent实现，包括为半分布式、全分布式和GraphX三个版本。
+\end_layout
+
+\begin_layout Subsection
+半分布式（NMFModel、NMFTrainer）
+\end_layout
+
+\begin_layout Standard
+半分布式适用于R的行数非常大，而列数相对较小的情况。如推荐中的User-Item矩阵，user数目可能上百万，但item数目是几万或十几万。此时，我们将R和W按
+行进行分开，而H矩阵作为广播变量常驻worker的内存。
+\end_layout
+
+\begin_layout Standard
+半分布式的优点:
+\end_layout
+
+\begin_layout Itemize
+减少对H的join操作
+\end_layout
+
+\begin_layout Itemize
+由于广播变量为每个worker上所有的executor共享，可节省内存
+\end_layout
+
+\begin_layout Standard
+数据结构定义：
+\end_layout
+
+\begin_layout Itemize
+R: RDD[(i:Int, j:Int, v:Int)], 其中i为rowID，j为colID，v为(i,j)对应的值
+\end_layout
+
+\begin_layout Itemize
+W: RDD[(i:Int, ws:DenseVector[Double])]，RDD每个实例包括一个Int类型的行ID，以及该行对应的K维latent
+ factor向量。
+\end_layout
+
+\begin_layout Itemize
+H: Broadcast[Map[j: Int, hs: DenseVector[Double]]，Map中每个实例包括一个Int类型的列ID，以及该列对应的K
+维latent factor向量。
+\end_layout
+
+\begin_layout Standard
+为进一步减少R与W的join操作，我们在计算过程中将R和W合并，用一个RDD来表示：
+\end_layout
+
+\begin_layout Itemize
+rows：RDD[(i: Int, row: RowType)], 其中RowType=(jvs: Iterable[(Int, Double)],
+ ws: DenseVector[Double]), jvs为第i行对应的非零元素列索引与值列表。
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float algorithm
+placement H
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Box Boxed
+position "t"
+hor_pos "c"
+has_inner_box 1
+inner_pos "t"
+use_parbox 0
+use_makebox 0
+width "100col%"
+special "none"
+height "1in"
+height_special "totalheight"
+status open
+
+\begin_layout Plain Layout
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+KwIn{$
+\backslash
+mathbb{R}=
+\backslash
+{r_{i,j}
+\backslash
+}, 
+\backslash
+eta, 
+\backslash
+lambda$} 
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+KwOut{$
+\backslash
+boldsymbol{W}$ and $
+\backslash
+boldsymbol{H}$}
+\end_layout
+
+\begin_layout Plain Layout
+
+Randomly initialize $
+\backslash
+boldsymbol{W}$ and $
+\backslash
+boldsymbol{H}$
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+While{not converge}{
+\end_layout
+
+\begin_layout Plain Layout
+
+    Broadcast $
+\backslash
+boldsymbol{H}$
+\end_layout
+
+\begin_layout Plain Layout
+
+	update each row of $
+\backslash
+boldsymbol{W}$ in parallel
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+	Fix $
+\backslash
+boldsymbol{W}$, calculate the gradient of $
+\backslash
+boldsymbol{H_{j}}$ in parallel
+\end_layout
+
+\begin_layout Plain Layout
+
+	Aggregate the gradients, and update $
+\backslash
+boldsymbol{H_{j}}$ in parallel		
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+NMF的Spark半分布式算法
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+全分布式
+\end_layout
+
+\begin_layout Standard
+全分布式适合原数据中行和列都非常多的情况。此时，我们的模型（即W和H矩阵）都是分布存储与计算的。全分布的最大优点是可避免单点（driver）计算瓶颈，因此扩展性
+更好。但另一方面，全分布式中对H的存取不方便，需要引入join操作，比较耗时。
+\end_layout
+
+\begin_layout Standard
+数据结构定义：
+\end_layout
+
+\begin_layout Itemize
+R: RDD[(i:Int, j:Int, v:Int)], 其中i为rowID，j为colID，v为(i,j)对应的值
+\end_layout
+
+\begin_layout Itemize
+W: RDD[(i:Int, ws:DenseVector[Double])]，RDD每个实例包括一个Int类型的行ID，以及该行对应的K维latent
+ factor向量。
+\end_layout
+
+\begin_layout Itemize
+H: RDD[(j: Int, hs: DenseVector[Double])]，RDD中每个实例包括一个Int类型的列ID，以及该列对应的K维latent
+ factor向量。
+\end_layout
+
+\begin_layout Standard
+为方便W和H的存取，R与W和H逐个Join得到一个中间RDD：
+\end_layout
+
+\begin_layout Itemize
+entries: RDD[(i:Int, j:Int, v:Int, ws: DenseVector[Double], hs: DenseVector[Doub
+le])], 看上去比较大，但由于java/scala存应用，所以还好。
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float algorithm
+placement H
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Box Boxed
+position "t"
+hor_pos "c"
+has_inner_box 1
+inner_pos "t"
+use_parbox 0
+use_makebox 0
+width "100col%"
+special "none"
+height "1in"
+height_special "totalheight"
+status open
+
+\begin_layout Plain Layout
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+KwIn{$
+\backslash
+mathbb{R}=
+\backslash
+{r_{i,j}
+\backslash
+}, 
+\backslash
+eta, 
+\backslash
+lambda$} 
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+KwOut{$
+\backslash
+boldsymbol{W}$ and $
+\backslash
+boldsymbol{H}$}
+\end_layout
+
+\begin_layout Plain Layout
+
+Randomly initialize $
+\backslash
+boldsymbol{W}$ and $
+\backslash
+boldsymbol{H}$
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+
+\backslash
+While{not converge}{	
+\end_layout
+
+\begin_layout Plain Layout
+
+	Fix $
+\backslash
+boldsymbol{H}$, calculate the gradient of $
+\backslash
+boldsymbol{W_{i}}$ in parallel
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+	Aggregate the gradients, and update $
+\backslash
+boldsymbol{W_{i}}$ in parallel		
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+	Fix $
+\backslash
+boldsymbol{W}$, calculate the gradient of $
+\backslash
+boldsymbol{H_{j}}$ in parallel	
+\backslash
+
+\backslash
+
+\end_layout
+
+\begin_layout Plain Layout
+
+	Aggregate the gradients, and update $
+\backslash
+boldsymbol{H_{j}}$ in parallel
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+NMF的Spark全分布式算法
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+GraphX 实现
+\end_layout
+
+\begin_layout Section
+实现细节
+\end_layout
+
+\begin_layout Subsection
+参数随机初始化
+\end_layout
+
+\begin_layout Standard
+由于NMF是一个非凸问题，所以只能找到一个local optimal。参数初始值的选取对结果的影响比较大。参数初始值最好离预期解比较近，所以其重构后应尽可能和原
+样本值接近：
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\boldsymbol{w}_{i}\boldsymbol{h}_{j}^{T}\thickapprox r_{i,j}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+一种简单的策略是让参数随机初始值重构后的值等于
+\begin_inset Formula $\mathbf{R}$
+\end_inset
+
+的均值
+\begin_inset Formula $\mu$
+\end_inset
+
+：
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\text{\mathbf{W}}=DenseMatrix.rand(M,K)*\sqrt{\frac{\mu}{K}}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+\text{\mathbf{H}}=DenseMatrix.rand(N,K)*\sqrt{\frac{\mu}{K}}
+\]
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document

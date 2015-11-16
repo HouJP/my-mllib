@@ -10,7 +10,7 @@ import scala.collection.mutable
  *
  * @param dt_para the configuration parameters for the decision tree algorithm
  */
-class DTree (private val dt_para: DTreePara) {
+class DTree(private val dt_para: DTreePara) {
 
   /**
    * Method to train a decision tree over a training data which represented as an array of [[bda.local.ml.model.LabeledPoint]]
@@ -47,8 +47,8 @@ class DTree (private val dt_para: DTreePara) {
       index_r) // nodeinfo
 
     // root of the decision tree
-    val pre = dt_para.loss_calculator.predict(stat)
-    val root = Node.empty(nodeIndex = 1, nodeDep = 0, predict = pre)
+    val pred = dt_para.loss_calculator.predict(stat)
+    val root = Node.empty(nodeIndex = 1, nodeDep = 0, predict = pred)
 
     val que_node = new mutable.Queue[(Node, Stat)]
     que_node.enqueue((root, stat)) // topNode covers dataIndex [0, numData)
@@ -117,21 +117,21 @@ class DTree (private val dt_para: DTreePara) {
         0,
         0,
         0,
-        stat.leftIndex,
-        stat.leftIndex)
+        stat.left_index,
+        stat.left_index)
       val stat_r = new Stat(
         dt_para.impurity_calculator,
         stat.count,
         stat.sum,
-        stat.sumSquares,
-        stat.leftIndex,
-        stat.rightIndex)
+        stat.squared_sum,
+        stat.left_index,
+        stat.right_index)
 
       val f_v = new Array[Double](stat.count)
       val index_tmp = new Array[Int](stat.count)
       for (offset <- 0 until stat.count) {
-        f_v(offset) = input(index_d(stat.leftIndex + offset)).features(featureIndex)
-        index_tmp(offset) = index_d(stat.leftIndex + offset)
+        f_v(offset) = input(index_d(stat.left_index + offset)).features(featureIndex)
+        index_tmp(offset) = index_d(stat.left_index + offset)
       }
       val ordered = index_tmp.zip(f_v).sortBy(_._2)
 
@@ -163,7 +163,7 @@ class DTree (private val dt_para: DTreePara) {
         best_stat_r.copy(a_best_stat_r)
 
         for (dataOffset <- 0 until stat.count) {
-          index_d(stat.leftIndex + dataOffset) = ordered(dataOffset)._1
+          index_d(stat.left_index + dataOffset) = ordered(dataOffset)._1
         }
       }
     }
@@ -185,15 +185,8 @@ class DTree (private val dt_para: DTreePara) {
       que_node.enqueue((node_l, best_stat_l))
       que_node.enqueue((node_r, best_stat_r))
 
-      //Log.log("INFO", s"node_${node.id} split into node_${leftNode.id} and node_${rightNode.id}, " +
-      //  s"with splitValue = ${node.splitValue} and featureID = ${node.featureID}")
-      //Log.log("INFO", s"\t\tnode_${node.id}'s stat: $stat")
-      //Log.log("INFO", s"\t\tnode_${leftNode.id}'s stat: $bestLeftStat")
-      //Log.log("INFO", s"\t\tnode_${rightNode.id}'s stat: $bestRightStat")
     } else {
       node.isLeaf = true
-
-      //Log.log("INFO", s"node_${node.id} stop split, with predict = ${node.predict}")
     }
   }
 }

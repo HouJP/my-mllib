@@ -1,6 +1,6 @@
 package bda.examples.ml
 
-import bda.local.ml.para.{Loss, Impurity, DTreePara}
+import bda.spark.ml.para.{Loss, Impurity, DTreePara}
 import scopt.OptionParser
 import bda.spark.ml.para.GBoostPara
 import bda.spark.ml.util.MLUtils
@@ -10,8 +10,8 @@ import org.apache.spark.{SparkConf, SparkContext}
 import bda.local.ml.util.Log
 
 /**
- * An example app for GBoost on cadata data (http://lib.stat.cmu.edu/datasets/houses.zip).
- * The cadata dataset can ben found at `data/cadata.txt`.
+ * An example app for GBoost on YearPredictionMSD data (http://archive.ics.uci.edu/ml/YearPredictionMSD).
+ * The YearPredictionMSD dataset can ben found at `data/YearPredictionMSD`.
  * If you use it as a template to create your own app, please use `spark-submit` to submit your app.
  */
 object RunSparkGBoost {
@@ -26,15 +26,14 @@ object RunSparkGBoost {
       impurity: String = "Variance",
       min_node_size: Int = 15,
       max_depth: Int = 10,
-      min_info_gain: Double = 1e-5,
-      data_sample_rate: Double = 0.2,
-      max_data_sample: Int = 10000)
+      max_bins: Int = 32,
+      min_samples: Int = 10000)
 
   def main(args: Array[String]) {
     val default_params = Params()
 
     val parser = new OptionParser[Params]("RunSparkGBoost") {
-      head("RunSparkGBoost: an example app for GBoost on cadata data.")
+      head("RunSparkGBoost: an example app for GBoost on YearPredictionMSD data.")
       opt[Int]("num_iter")
         .text(s"number of iterations, default: ${default_params.num_iter}")
         .action((x, c) => c.copy(num_iter = x))
@@ -56,15 +55,12 @@ object RunSparkGBoost {
       opt[Int]("max_depth")
         .text(s"maximum depth of tree, default: ${default_params.max_depth}")
         .action((x, c) => c.copy(max_depth = x))
-      opt[Double]("min_info_gain")
-        .text(s"minimum info gain, default: ${default_params.min_info_gain}")
-        .action((x, c) => c.copy(min_info_gain = x))
-      opt[Double]("data_sample_rate")
-        .text(s"rate to sample data, default: ${default_params.data_sample_rate}")
-        .action((x, c) => c.copy(data_sample_rate = x))
-      opt[Int]("max_data_sample")
-        .text(s"maximum number of sampled data, default: ${default_params.max_data_sample}")
-        .action((x, c) => c.copy(max_data_sample = x))
+      opt[Int]("max_bins")
+        .text(s"maximum number of bins, default: ${default_params.max_bins}")
+        .action((x, c) => c.copy(max_bins = x))
+      opt[Int]("min_samples")
+        .text(s"minimum number of samples, default: ${default_params.min_samples}")
+        .action((x, c) => c.copy(min_samples = x))
       arg[String]("<input>")
         .required()
         .text("input paths to the cadata dataset in LibSVM format")
@@ -81,7 +77,8 @@ object RunSparkGBoost {
           |   out/artifacts/*/*.jar \
           |   --num_iter 100 --learn_rate 0.01 \
           |   --min_node_size 15 --max_depth 10 \
-          |   hdfs://bda00:8020/user/houjp/gboost/data/cadata.txt
+          |   --max_bins 32 --min_samples 10000 \
+          |   hdfs://bda00:8020/user/houjp/gboost/data/YearPredictionMSD/
           |   hdfs://bda00:8020/user/houjp/gboost/data/checkpoint/
         """.stripMargin)
     }
@@ -103,23 +100,26 @@ object RunSparkGBoost {
       loss = Loss.fromString(params.loss),
       min_node_size = params.min_node_size,
       max_depth = params.max_depth,
-      min_info_gain = params.min_info_gain)
+      max_bins = params.max_bins,
+      min_samples = params.min_samples)
     val gb_para = new GBoostPara(dt_para = dt_para,
       num_iter = params.num_iter,
       learn_rate = params.learn_rate,
       loss = Loss.fromString(params.loss),
-      min_step = params.min_step,
-      data_sample_rate = params.data_sample_rate,
-      max_data_sample = params.max_data_sample)
+      min_step = params.min_step)
 
-    val input_pt = params.input
-    val Array(train, test) = MLUtils.loadLibSVMFile(sc, input_pt).randomSplit(Array(0.7, 0.3))
+    // Load and parse the data file
+    val train_data = MLUtils.loadLibSVMFile(sc, params.input + ".train").persist()
+    val test_data = MLUtils.loadLibSVMFile(sc, params.input + ".test").persist()
 
-    val gb_model: GBoostModel = new GBoost(gb_para).fit(train)
+    val gb_model: GBoostModel = new GBoost(gb_para).fit(train_data)
 
     Log.log("INFO", "get train set RMSE")
-    gb_model.predict(train)
+    gb_model.predict(train_data)
     Log.log("INFO", "get test set RMSE")
-    gb_model.predict(test)
+    gb_model.predict(test_data)
+
+    train_data.unpersist()
+    test_data.unpersist()
   }
 }

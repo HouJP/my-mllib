@@ -5,27 +5,27 @@ import bda.local.ml.impurity.{ImpurityCalculator, VarianceCalculator}
 /**
  * Class of status of the node in a tree.
  *
- * @param impurityCalculator impurity calculator [[bda.local.ml.impurity.ImpurityCalculator]]
+ * @param impurity_calculator impurity calculator [[bda.local.ml.impurity.ImpurityCalculator]]
  * @param count number of instances the node has
  * @param sum summation of labels of instances the node has
- * @param sumSquares summation of squares of labels of instances the node has
- * @param leftIndex leftmost id of instances the node has
- * @param rightIndex next id of rightmost instances the node has
+ * @param squared_sum summation of squares of labels of instances the node has
+ * @param left_index leftmost id of instances the node has
+ * @param right_index next id of rightmost instances the node has
  */
 class Stat(
-    var impurityCalculator: ImpurityCalculator,
+    var impurity_calculator: ImpurityCalculator,
     var count: Int,
     var sum: Double,
-    var sumSquares: Double,
-    var leftIndex: Int,
-    var rightIndex: Int) {
+    var squared_sum: Double,
+    var left_index: Int,
+    var right_index: Int) {
 
   /** information value of the node */
-  var impurity = impurityCalculator.calculate(count, sum, sumSquares)
+  var impurity = impurity_calculator.calculate(count, sum, squared_sum)
 
   override def toString: String = {
-    s"count = $count, sum = $sum, sumSquares = $sumSquares, " +
-      s"leftIndex = $leftIndex, rightIndex = $rightIndex, " +
+    s"count = $count, sum = $sum, sumSquares = $squared_sum, " +
+      s"leftIndex = $left_index, rightIndex = $right_index, " +
       s"impurity = $impurity"
   }
 
@@ -35,37 +35,37 @@ class Stat(
    * @param stat stat of another node
    */
   def copy(stat: Stat): Unit = {
-    this.impurityCalculator = stat.impurityCalculator
+    this.impurity_calculator = stat.impurity_calculator
     this.count = stat.count
     this.sum = stat.sum
-    this.sumSquares = stat.sumSquares
-    this.leftIndex = stat.leftIndex
-    this.rightIndex = stat.rightIndex
+    this.squared_sum = stat.squared_sum
+    this.left_index = stat.left_index
+    this.right_index = stat.right_index
     this.impurity = stat.impurity
   }
 
   /**
    * Method to udpate stat of the node with variations.
    *
-   * @param countBias count variation of the node
-   * @param sumBias sum variation of the node
-   * @param sumSquaresBias sumSquares variation of the node
+   * @param count_bias count variation of the node
+   * @param sum_bias sum variation of the node
+   * @param sum_squares_bias sumSquares variation of the node
    * @param leftIndexBias left index variation of the node
    * @param rightIndexBias right index variation of the node
    */
   def update(
-      countBias: Int,
-      sumBias: Double,
-      sumSquaresBias: Double,
+      count_bias: Int,
+      sum_bias: Double,
+      sum_squares_bias: Double,
       leftIndexBias: Int,
       rightIndexBias: Int): Unit = {
 
-    count += countBias
-    sum += sumBias
-    sumSquares += sumSquaresBias
-    leftIndex += leftIndexBias
-    rightIndex += rightIndexBias
-    impurity = impurityCalculator.calculate(count, sum, sumSquares)
+    count += count_bias
+    sum += sum_bias
+    squared_sum += sum_squares_bias
+    left_index += leftIndexBias
+    right_index += rightIndexBias
+    impurity = impurity_calculator.calculate(count, sum, squared_sum)
   }
 
   /**
