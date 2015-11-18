@@ -53,10 +53,16 @@ object Stat {
     new Stat(0, 0.0, 0.0)
   }
 
-  def cal_weighted_impurity(stat_a: Stat, stat_b: Stat, impurity_calculator: ImpurityCalculator): Double = {
-    val sum_count = stat_a.count + stat_b.count
+  def cal_weighted_impurity(l_stat: Stat, r_stat: Stat, impurity_calculator: ImpurityCalculator): Double = {
+    val sum_count = l_stat.count + r_stat.count
 
-    stat_a.cal_impurity(impurity_calculator) * stat_a.count / sum_count +
-      stat_b.cal_impurity(impurity_calculator) * stat_b.count / sum_count
+    l_stat.cal_impurity(impurity_calculator) * l_stat.count / sum_count +
+      r_stat.cal_impurity(impurity_calculator) * r_stat.count / sum_count
+  }
+
+  def cal_weighted_impurity(l_stat: Stat, r_stat: Stat, l_impurity: Double, r_impurity: Double): Double = {
+    val sum_count = l_stat.count + r_stat.count
+
+    l_impurity * l_stat.count / sum_count + r_impurity * r_stat.count / sum_count
   }
 }

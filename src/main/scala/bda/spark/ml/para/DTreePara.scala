@@ -12,7 +12,8 @@ class DTreePara(
     val max_depth: Int = 10,
     val max_bins: Int = 32,
     val min_samples: Int = 10000,
-    val min_node_size: Int = 15) extends  Serializable {
+    val min_node_size: Int = 15,
+    val min_info_gain: Double = 1e-6) extends  Serializable {
 
   val impurity_calculator = impurity match {
     case Variance => VarianceCalculator

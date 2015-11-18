@@ -25,6 +25,13 @@ class DTree(private val dt_para: DTreePara) {
 
     // create root for decision tree
     val root = Node.empty(id = 1, 0)
+    // calculate root's impurity and root's predict
+    val root_count = metadata.num_examples
+    val root_sum = dt_points.map(_.label).sum()
+    val root_squared_sum = dt_points.map(p => p.label * p.label).sum()
+    val root_stat = new Stat(root_count, root_sum, root_squared_sum)
+    root.impurity = root_stat.cal_impurity(dt_para.impurity_calculator)
+    root.predict = root_stat.cal_prediction(dt_para.loss_calculator)
 
     // create a node queue which help to generate a binary tree
     val node_que = new mutable.Queue[Node]()
@@ -67,22 +74,22 @@ class DTree(private val dt_para: DTreePara) {
         stats.toArray.iterator
       }
 
-      val stats = stats_aggregator.reduceByKey { (stats_a, stats_b) =>
+      val stats: RDD[(Int, Array[Array[Stat]])] = stats_aggregator.reduceByKey { (stats_a, stats_b) =>
         for (index_feature <- 0 until metadata.num_features) {
           for (index_bin <- 0 until metadata.num_bins(index_feature)) {
             stats_a(index_feature)(index_bin).merge(stats_b(index_feature)(index_bin))
           }
         }
         stats_a
-      }.collectAsMap()
+      }
 
-      // find best splits for leaves
+      val stats_map = stats.collectAsMap()
+
+      // find best_splits for leaves by distributed operation
+      val nodes_best_split = DTree.findBestSplit(stats, metadata, dt_para)
+      DTree.updateBestSplit(leaves, nodes_best_split, bins, metadata, dt_para)
+
       leaves.foreach { node =>
-        // find best split for node
-        DTree.findBestSplit(node, stats(node.id), metadata, dt_para, bins)
-        // split this node
-        DTree.split(node)
-        // push left child and right child of this node into queue
         DTree.inQueue(node_que, node.left_child)
         DTree.inQueue(node_que, node.right_child)
       }
@@ -157,6 +164,7 @@ object DTree {
 
     val splits = {
       val num_splits = metadata.numSplits(index_feature)
+      //Log.log("INFO", s"<findSplit> index_feature = ${index_feature}, num_splits = $num_splits")
 
       // get count for each distinct value
       val value_cnts = sampled_features.foldLeft(Map.empty[Double, Int]) { (m, x) =>
@@ -165,8 +173,9 @@ object DTree {
 
       // if possible splits is not enough or just enough, just return all possible splits
       val possible_splits = value_cnts.length
+      //Log.log("INFO", s"<findSplit> possible_splits = $possible_splits")
       if (possible_splits <= num_splits) {
-        value_cnts.map(_._1)
+        value_cnts.map(_._1).take(possible_splits - 1)
       } else {
         val stride: Double = sampled_features.length.toDouble / (num_splits + 1)
 
@@ -185,6 +194,8 @@ object DTree {
           }
           index += 1
         }
+        val tmp = split_builder.result()
+        //Log.log("INFO", s"<findSplit> tmp.length = ${tmp.length}")
         split_builder.result()
       }
     }
@@ -266,8 +277,8 @@ object DTree {
     node.split match {
       case Some(split) =>
         node.is_leaf = false
-        node.left_child = Some(Node.generate_lchild(node))
-        node.right_child = Some(Node.generate_rchild(node))
+        //node.left_child = Some(Node.generate_lchild(node))
+        //node.right_child = Some(Node.generate_rchild(node))
       case _ =>
     }
   }
@@ -276,6 +287,73 @@ object DTree {
     node match {
       case Some(n)  => que.enqueue(n)
       case _ =>
+    }
+  }
+
+  def findBestSplit(
+      stats: RDD[(Int, Array[Array[Stat]])],
+      metadata: DTreeMetaData,
+      dt_para: DTreePara): scala.collection.Map[Int, (Double, Int, Int, Double, Double, Double, Double, Int, Int)] = {
+
+    stats.map { case (id, node_stats) =>
+      val best_split = Range(0, metadata.num_features).map { case index_f =>
+        val num_splits = metadata.numSplits(index_f)
+        val num_bins = metadata.num_bins(index_f)
+
+        var index_b = 1
+        while (index_b < num_bins) {
+          node_stats(index_f)(index_b).merge(node_stats(index_f)(index_b - 1))
+          index_b += 1
+        }
+
+        Range (0, num_splits).map { case index_s =>
+          val l_stat = node_stats(index_f)(index_s)
+          val r_stat = node_stats(index_f)(num_bins - 1).copy.disunify(l_stat)
+
+          val l_impurity = l_stat.cal_impurity(dt_para.impurity_calculator)
+          val r_impurity = r_stat.cal_impurity(dt_para.impurity_calculator)
+          val weighted_impurity = Stat.cal_weighted_impurity(l_stat, r_stat, l_impurity, r_impurity)
+
+          val l_pred = l_stat.cal_prediction(dt_para.loss_calculator)
+          val r_pred = r_stat.cal_prediction(dt_para.loss_calculator)
+
+          val l_cnt = l_stat.count
+          val r_cnt = r_stat.count
+
+          (weighted_impurity, index_f, index_s, l_impurity, r_impurity, l_pred, r_pred, l_cnt, r_cnt)
+        }.minBy(_._1)
+      }.minBy(_._1)
+      (id, best_split)
+    }.collectAsMap()
+  }
+
+  def updateBestSplit(
+      leaves: Array[Node],
+      nodes_best_split: scala.collection.Map[Int, (Double, Int, Int, Double, Double, Double, Double, Int, Int)],
+      bins: Array[Array[Bin]],
+      metadata: DTreeMetaData,
+      dt_para: DTreePara): Unit = {
+
+    val num_leaves = leaves.length
+
+    var index = 0
+    while (index < num_leaves) {
+      val node = leaves(index)
+      val (weighted_impurity, split_f, split_s, l_impurity, r_impurity, l_pred, r_pred, l_cnt, r_cnt) = nodes_best_split(node.id)
+      val info_gain = node.impurity - weighted_impurity
+      val split = bins(split_f)(split_s).high_split
+      if ((weighted_impurity >= dt_para.min_info_gain)
+        && (node.depth < dt_para.max_depth)
+        && (l_cnt >= dt_para.min_node_size)
+        && (r_cnt >= dt_para.min_node_size)) {
+
+        node.is_leaf = false
+        node.split = Some(split)
+        node.generate_lchild(l_impurity, l_pred)
+        node.generate_rchild(r_impurity, r_pred)
+      }
+
+      index += 1
     }
   }
 }

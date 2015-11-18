@@ -68,7 +68,7 @@ object RunSparkDTree {
   }
 
   def run(params: Params) {
-    val conf = new SparkConf().setAppName(s"DTree Example with $params")
+    val conf = new SparkConf().setAppName(s"DTree Example with $params").setMaster("local[2]")
     val sc = new SparkContext(conf)
 
     // Load and parse the data file
