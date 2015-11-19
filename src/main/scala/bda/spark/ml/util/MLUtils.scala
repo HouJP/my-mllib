@@ -4,6 +4,7 @@ import bda.common.linalg.immutable.SparseVector
 import bda.local.ml.model.LabeledPoint
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 
 import scala.io.Source
 
@@ -37,6 +38,7 @@ object MLUtils {
     }
 
     // Determine number of features.
+    parsed.persist(StorageLevel.MEMORY_ONLY)
     val n = parsed.map { case (label, indices, values) =>
       indices.lastOption.getOrElse(0)
     }.reduce(math.max) + 1

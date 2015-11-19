@@ -4,15 +4,9 @@ import bda.local.ml.model.LabeledPoint
 import bda.common.linalg.immutable.SparseVector
 import org.apache.spark.rdd.RDD
 
-class DTreePoint(val label: Double, val features: SparseVector[Double], val binned_features: Array[Int]) {
-
-  override def toString: String = {
-    var str_binned_fs = new String()
-    for (index_f <- 0 until features.size) {
-      str_binned_fs += s" ${index_f + 1}:${features(index_f)}, ${binned_features(index_f)}"
-    }
-    s"${label}" + str_binned_fs
-  }
+class DTreePoint(
+    val label: Double,
+    val binned_features: Array[Int]) extends Serializable {
 }
 
 object DTreePoint {
@@ -41,7 +35,7 @@ object DTreePoint {
       binned_fs(index_f) = binned_f
     }
 
-    new DTreePoint(lp.label, lp.features, binned_fs)
+    new DTreePoint(lp.label, binned_fs)
   }
 
   def binarySearchForBin(
