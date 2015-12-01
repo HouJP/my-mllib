@@ -1,17 +1,14 @@
+.idea/
 .idea/*
 
+target
 target/*
 
-project/target/*
-project/project/target/*
-
-bin/upload.sh
-
-out/*
-
+data
 data/*
 
-submit.sh
+project/target
+project/target/*
 
-.DS_Store
-
+project/project/target
+project/project/target/*
