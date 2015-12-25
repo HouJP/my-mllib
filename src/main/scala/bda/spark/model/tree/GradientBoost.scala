@@ -1,6 +1,6 @@
 package bda.spark.model.tree
 
-import bda.common.obj.RegPoint
+import bda.common.obj.LabeledPoint
 import bda.common.linalg.immutable.SparseVector
 import bda.common.util.{Msg, Timer}
 import bda.common.Logging
@@ -8,6 +8,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import bda.spark.model.tree.Impurity._
 import bda.spark.model.tree.Loss._
+import bda.spark.evaluate.Regression.RMSE
 
 /**
  * External interface of GBDT on spark.
@@ -31,8 +32,9 @@ object GradientBoost {
    * @param min_step Minimum step of each iteration, or stop it.
    * @return a [[bda.spark.model.tree.GradientBoostModel]] instance.
    */
-  def train(train_data: RDD[RegPoint],
-            valid_data: Option[RDD[RegPoint]] = None,
+  def train(train_data: RDD[LabeledPoint],
+            valid_data: RDD[LabeledPoint] = null,
+            feature_num: Int = 0,
             impurity: String = "Variance",
             loss: String = "SquaredError",
             max_depth: Int = 10,
@@ -44,7 +46,8 @@ object GradientBoost {
             learn_rate: Double = 0.02,
             min_step: Double = 1e-5): GradientBoostModel = {
 
-    new GradientBoostTrainer(Impurity.fromString(impurity),
+    new GradientBoostTrainer(feature_num,
+      Impurity.fromString(impurity),
       Loss.fromString(loss),
       max_depth,
       max_bins,
@@ -71,7 +74,8 @@ object GradientBoost {
  * @param learn_rate Value of learning rate.
  * @param min_step Minimum step of each iteration, or stop it.
  */
-private[tree] class GradientBoostTrainer(impurity: Impurity,
+private[tree] class GradientBoostTrainer(feature_num: Int,
+                                         impurity: Impurity,
                                          loss: Loss,
                                          max_depth: Int,
                                          max_bins: Int,
@@ -97,19 +101,19 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
   /**
    * Method to train a GBDT model over training data.
    *
-   * @param train_data Training data which represented as a RDD of [[bda.common.obj.RegPoint]].
-   * @param valid_data Validation data which represented as a RDD of [[bda.common.obj.RegPoint]] and can be none.
+   * @param train_data Training data which represented as a RDD of [[bda.common.obj.LabeledPoint]].
+   * @param valid_data Validation data which represented as a RDD of [[bda.common.obj.LabeledPoint]] and can be none.
    * @return a [[bda.spark.model.tree.GradientBoostModel]] instance.
    */
-  def train(train_data: RDD[RegPoint],
-            valid_data: Option[RDD[RegPoint]]): GradientBoostModel = {
+  def train(train_data: RDD[LabeledPoint],
+            valid_data: RDD[LabeledPoint]): GradientBoostModel = {
     val loss_calculator = this.loss_calculator
     val wk_learners = new Array[DecisionTreeNode](num_iter)
 
     // persist input RDD for reusing
     train_data.persist()
-    if (!valid_data.isEmpty) {
-      valid_data.get.persist()
+    if (null != valid_data) {
+      valid_data.persist()
     }
     // input.count()
 
@@ -123,28 +127,31 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
     var data = train_data
 
     // build weak learner 0
-    val wl0 = new DecisionTreeTrainer(impurity,
+    val wl0 = new DecisionTreeTrainer(feature_num,
+      impurity,
       loss,
       max_depth,
       max_bins,
       min_samples,
       min_node_size,
-      min_info_gain).train(data)
+      min_info_gain).train(data, null)
     wk_learners(0) = wl0.root
 
     // compute prediction and RMSE for train data
-    var train_pred_err = computePredictAndError(train_data, learn_rate, wl0.root, loss_calculator).persist()
-    var train_err = math.sqrt(train_pred_err.values.mean())
+    var train_pred = computePredict(train_data, learn_rate, wl0.root, loss_calculator).persist()
+    var train_rmse = RMSE(train_data.map(_.label).zip(train_pred))
 
     // compute prediction and RMSE for validation data
-    var valid_pred_err = valid_data.map { data =>
-      computePredictAndError(data, learn_rate, wl0.root, loss_calculator).persist()
+    var valid_pred = if (null != valid_data) {
+      computePredict(data, learn_rate, wl0.root, loss_calculator).persist()
+    } else {
+      null
     }
-    var valid_err = valid_pred_err.map { pred_err =>
-      math.sqrt(pred_err.values.mean())
+    var valid_rmse = if (null != valid_data) {
+      RMSE(valid_data.map(_.label).zip(valid_pred))
     }
 
-    var min_err = train_err
+    var min_rmse = train_rmse
     var best_iter = 1
 
     var tol_time_cost = timer.cost()
@@ -153,65 +160,66 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
     cost_count += 1
 
     // show logs
-    var msg = Msg("Iter" -> cost_count, "RMSE(train)" -> train_err)
-    valid_err.foreach(msg.append("RMSE(valid)", _))
+    var msg = Msg("Iter" -> cost_count, "RMSE(train)" -> train_rmse)
+    if (null != valid_data) {
+      msg.append("RMSE(valid)", valid_rmse)
+    }
     msg.append("time cost", now_time_cost)
     logInfo(msg.toString)
-    // Log.log("INFO", s"fitting: iter = 0, error = $min_err, cost_time = $now_time_cost")
 
     var iter = 1
     while (iter < num_iter) {
       val begin_t = System.nanoTime()
 
       // get data to train DTree
-      data = train_pred_err.zip(train_data).map { case ((pred, _), lp) =>
-        RegPoint(-1.0 * loss_calculator.gradient(pred, lp.label), lp.fs)
+      data = train_pred.zip(train_data).map { case (pred, lp) =>
+        LabeledPoint(-1.0 * loss_calculator.gradient(pred, lp.label), lp.fs)
       }
 
       // building weak leaner #iter
-      val wl = new DecisionTreeTrainer(impurity,
+      val wl = new DecisionTreeTrainer(feature_num,
+        impurity,
         loss,
         max_depth,
         max_bins,
         min_samples,
         min_node_size,
-        min_info_gain).train(data)
+        min_info_gain).train(data, null)
       wk_learners(iter) = wl.root
 
       // compute prediction and error for train data
-      val train_pre_pred_err = train_pred_err
-      train_pred_err = updatePredictAndError(
+      val train_pre_pred = train_pred
+      train_pred = updatePredict(
         train_data,
-        train_pre_pred_err,
+        train_pre_pred,
         learn_rate,
         wl.root,
         loss_calculator).persist()
       if (iter % 20 == 0) {
-        train_pred_err.checkpoint()
+        train_pred.checkpoint()
       }
-      train_pre_pred_err.unpersist()
+      train_pre_pred.unpersist()
       if (iter % 20 == 0) {
-        train_pred_err.checkpoint()
+        train_pred.checkpoint()
       }
-      train_pre_pred_err.unpersist()
-      val train_err = math.sqrt(train_pred_err.values.mean())
+      train_pre_pred.unpersist()
+      train_rmse = RMSE(train_data.map(_.label).zip(train_pred))
+
 
       // compute prediction and error for validatoin data
-      val valid_pre_pred_err = valid_pred_err
-      valid_pred_err = valid_data.map { data =>
-        updatePredictAndError(
-          data,
-          valid_pre_pred_err.get,
+      val valid_pre_pred_err = valid_pred
+      if (null != valid_data) {
+        valid_pred = updatePredict(
+          valid_data,
+          valid_pre_pred_err,
           learn_rate,
           wl.root,
           loss_calculator).persist()
-      }
-      if (iter % 20 == 0) {
-        valid_pred_err.foreach(_.checkpoint())
-      }
-      valid_pre_pred_err.foreach(_.unpersist())
-      val valid_err = valid_pred_err.map { pred_err =>
-        math.sqrt(pred_err.values.mean())
+        if (0 == (iter % 20)) {
+          valid_pred.localCheckpoint()
+        }
+        valid_pre_pred_err.unpersist()
+        valid_rmse = RMSE(valid_data.map(_.label).zip(valid_pred))
       }
 
       tol_time_cost = timer.cost()
@@ -220,16 +228,21 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
       cost_count += 1
 
       // show logs
-      msg = Msg("Iter" -> cost_count, "RMSE(train)" -> train_err)
-      valid_err.foreach(msg.append("RMSE(valid)", _))
+      msg = Msg("Iter" -> cost_count, "RMSE(train)" -> train_rmse)
+      if (null != valid_data) {
+        msg.append("RMSE(valid)", valid_rmse)
+      }
       msg.append("time cost", now_time_cost)
       logInfo(msg.toString)
       // Log.log("INFO", s"fitting: iter = $iter, error = $train_err, cost_time = $now_time_cost")
 
-      if (min_err - train_err < min_step) {
+      if (min_rmse - train_rmse < min_step) {
 
-        logInfo(s"Gradient Boost model training done, average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count}})")
+        logInfo(s"Gradient Boost model training done, " +
+          s"average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count}})")
+
         return new GradientBoostModel(wk_learners.slice(0, best_iter),
+          feature_num,
           impurity,
           loss,
           max_depth,
@@ -242,21 +255,25 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
           min_step,
           impurity_calculator,
           loss_calculator)
-      } else if (train_err < min_err) {
-        min_err = train_err
+      } else if (train_rmse < min_rmse) {
+        min_rmse = train_rmse
         best_iter = iter + 1
       }
 
       iter += 1
     }
 
-    logInfo(s"GBoost model training done, average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count}})")
+    logInfo(s"GBoost model training done, " +
+      s"average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count}})")
 
     // unpersist input RDD
     train_data.unpersist()
-    valid_data.foreach(_.unpersist())
+    if (null != valid_data) {
+      valid_data.unpersist()
+    }
 
     new GradientBoostModel(wk_learners.slice(0, best_iter),
+      feature_num,
       impurity,
       loss,
       max_depth,
@@ -272,45 +289,41 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
   }
 
   /**
-   * Predict values and get the mean error for the given data using the model trained and the model weight.
+   * Predict values for the given data using the model trained and the model weight.
    *
-   * @param data A RDD of [[bda.common.obj.RegPoint]] stored true label and features.
+   * @param data A RDD of [[bda.common.obj.LabeledPoint]] stored true label and features.
    * @param weight Model weight
    * @param root Root node in decision tree struction.
    * @param loss Loss calculator used in gradient boosting.
-   * @return RDD stored prediction and the mean error.
+   * @return RDD stored prediction.
    */
-  def computePredictAndError(data: RDD[RegPoint],
-                             weight: Double,
-                             root: DecisionTreeNode,
-                             loss: LossCalculator): RDD[(Double, Double)] = {
+  def computePredict(data: RDD[LabeledPoint],
+                     weight: Double,
+                     root: DecisionTreeNode,
+                     loss: LossCalculator): RDD[Double] = {
     data.map { lp =>
-      val pred = DecisionTreeModel.predict(lp.fs, root)
-    val err = loss.computeError(lp.label, pred)
-      (pred, err)
+      DecisionTreeModel.predict(lp.fs, root)
     }
   }
 
   /**
-   * Update predictions and get the mean error for the given data using the model trained and the model weight.
+   * Update predictions for the given data using the model trained and the model weight.
    *
-   * @param data A RDD of [[bda.common.obj.RegPoint]] stored true label and features.
+   * @param data A RDD of [[bda.common.obj.LabeledPoint]] stored true label and features.
    * @param pred_err
    * @param weight
    * @param root
    * @param loss_calculator
-   * @return
+   * @return predictions updated.
    */
-  def updatePredictAndError(data: RDD[RegPoint],
-                            pred_err: RDD[(Double, Double)],
-                            weight: Double,
-                            root: DecisionTreeNode,
-                            loss_calculator: LossCalculator): RDD[(Double, Double)] = {
+  def updatePredict(data: RDD[LabeledPoint],
+                    pred_err: RDD[Double],
+                    weight: Double,
+                    root: DecisionTreeNode,
+                    loss_calculator: LossCalculator): RDD[Double] = {
     data.zip(pred_err).mapPartitions { iter =>
-      iter.map { case (lp, (pred, err)) =>
-        val new_pred = pred + DecisionTreeModel.predict(lp.fs, root) * weight
-        val new_err = loss_calculator.computeError(lp.label, new_pred)
-        (new_pred, new_err)
+      iter.map { case (lp, pred) =>
+         pred + DecisionTreeModel.predict(lp.fs, root) * weight
       }
     }
   }
@@ -335,43 +348,38 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
  * @param impurity_calculator Impurity calculator.
  * @param loss_calculator Loss calculator.
  */
-private[tree] class GradientBoostModel(wk_learners: Array[DecisionTreeNode],
-                  impurity: Impurity,
-                  loss: Loss,
-                  max_depth: Int,
-                  max_bins: Int,
-                  min_samples: Int,
-                  min_node_size: Int,
-                  min_info_gain: Double,
-                  num_iter: Int,
-                  learn_rate: Double,
-                  min_step: Double,
-                  impurity_calculator: ImpurityCalculator,
-                  loss_calculator: LossCalculator) extends Serializable {
+class GradientBoostModel(val wk_learners: Array[DecisionTreeNode],
+                         val feature_num: Int,
+                         val impurity: Impurity,
+                         val loss: Loss,
+                         val max_depth: Int,
+                         val max_bins: Int,
+                         val min_samples: Int,
+                         val min_node_size: Int,
+                         val min_info_gain: Double,
+                         val num_iter: Int,
+                         val learn_rate: Double,
+                         val min_step: Double,
+                         val impurity_calculator: ImpurityCalculator,
+                         val loss_calculator: LossCalculator) extends Serializable {
 
   /**
    * Predict values for the given data set using the model trained.
    * Statistic RMSE while predicting.
    *
-   * @param input A RDD of [[bda.common.obj.RegPoint]] stored true label and features.
+   * @param input A RDD of [[bda.common.obj.LabeledPoint]] stored true label and features.
    * @return RDD stored prediction.
    */
-  def predict(input: RDD[RegPoint]): (RDD[Double], Double) = {
+  def predict(input: RDD[LabeledPoint]): RDD[Double] = {
     val wk_learners = this.wk_learners
     val learn_rate = this.learn_rate
     val loss = loss_calculator
 
-    val pred_err = input.map { case lp =>
-      val pred = GradientBoostModel.predict(lp.fs, wk_learners, learn_rate)
-      val err = loss.computeError(pred, lp.label)
-      (pred, err)
+    val pred = input.map { case lp =>
+      GradientBoostModel.predict(lp.fs, wk_learners, learn_rate)
     }
 
-    val err = pred_err.values.mean()
-
-    //Log.log("INFO", s"predict done, with RMSE = ${math.sqrt(err)}")
-
-    (pred_err.keys, math.sqrt(err))
+    pred
   }
 
   /**

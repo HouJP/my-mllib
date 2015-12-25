@@ -1,7 +1,8 @@
 package bda.local.runnable.decisionTree
 
+import bda.common.util.io.writeLines
+import bda.local.preprocess.Points
 import scopt.OptionParser
-import bda.local.reader.LibSVMFile
 import bda.local.model.tree.DecisionTreeModel
 
 /**
@@ -42,9 +43,9 @@ object Predict {
           |For example, the following command runs this app on your data set:
           |
           | java -jar out/artifacts/*/*.jar \
-          |   /user/houjp/data/YourTestDataName
-          |   /user/houjp/model/YourModelName
-          |   /user/houjp/data/YourOutDataName
+          |   --test_pt ... \
+          |   --model_pt ... \
+          |   --predict_pt ...
         """.stripMargin)
     }
 
@@ -57,16 +58,12 @@ object Predict {
 
   def run(params: Params) {
 
-    // Load and parse the data file
-    val (test_data, train_fs_num) = {
-      val (data, num) = LibSVMFile.readAsReg(params.test_pt)
-      (data.toArray, num)
+    val model: DecisionTreeModel = DecisionTreeModel.load(params.model_pt)
+    val points =  Points.fromLibSVMFile(params.test_pt, model.feature_num)
+    val predictions = points.map { pn =>
+      val y = model.predict(pn.fs)
+      s"$y\t$pn"
     }
-
-    val dt_model = DecisionTreeModel.load(params.model_pt)
-    val (predicions, err) = dt_model.predict(test_data)
-
-    // show RMSE
-    println(s"Prediction done, RMSE(test_data)=$err")
+    writeLines(params.predict_pt, predictions)
   }
 }

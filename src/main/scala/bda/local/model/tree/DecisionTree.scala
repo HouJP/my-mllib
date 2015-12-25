@@ -1,11 +1,12 @@
 package bda.local.model.tree
 
-import bda.common.obj.RegPoint
+import bda.common.obj.LabeledPoint
 import bda.common.linalg.immutable.SparseVector
 import bda.common.util.{io, Msg, Timer}
 import bda.common.Logging
 import bda.local.model.tree.Impurity._
 import bda.local.model.tree.Loss._
+import bda.local.evaluate.Regression.RMSE
 
 import scala.collection.mutable
 import scala.util.Random
@@ -27,15 +28,17 @@ object DecisionTree {
    * @param min_info_gain Minimum information gain while spliting, default is 1e-6.
    * @return a [[bda.local.model.tree.DecisionTreeModel]] instance.
    */
-  def train(train_data: Array[RegPoint],
-            valid_data: Option[Array[RegPoint]] = None,
+  def train(train_data: Seq[LabeledPoint],
+            valid_data: Seq[LabeledPoint] = null,
+            feature_num: Int,
             impurity: String = "Variance",
             loss: String = "SquaredError",
             max_depth: Int = 10,
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6): DecisionTreeModel = {
 
-    val model = new DecisionTreeTrainer(Impurity.fromString(impurity),
+    val model = new DecisionTreeTrainer(feature_num,
+      Impurity.fromString(impurity),
       Loss.fromString(loss),
       max_depth,
       min_node_size,
@@ -54,7 +57,8 @@ object DecisionTree {
  * @param min_node_size Minimum number of instances in the leaf.
  * @param min_info_gain Minimum information gain while spliting.
  */
-private[tree] class DecisionTreeTrainer(impurity: Impurity,
+private[tree] class DecisionTreeTrainer(feature_num: Int,
+                                        impurity: Impurity,
                                         loss: Loss,
                                         max_depth: Int,
                                         min_node_size: Int,
@@ -75,16 +79,16 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
   /**
    * Method to train a decision tree model over training data.
    *
-   * @param train_data Training data which represented as an array of [[bda.common.obj.RegPoint]].
-   * @param valid_data Validation data which represented as an array of [[bda.common.obj.RegPoint]] and can be none.
+   * @param train_data Training data which represented as an array of [[bda.common.obj.LabeledPoint]].
+   * @param valid_data Validation data which represented as an array of [[bda.common.obj.LabeledPoint]] and can be none.
    * @return A [[bda.local.model.tree.DecisionTreeModel]] instance.
    */
-  def train(train_data: Array[RegPoint],
-            valid_data: Option[Array[RegPoint]] = None): DecisionTreeModel = {
+  def train(train_data: Seq[LabeledPoint],
+            valid_data: Seq[LabeledPoint] = null): DecisionTreeModel = {
 
     val timer = new Timer()
 
-    val num_f = train_data(0).fs.size
+    val num_f = feature_num
     val num_d = train_data.length
 
     val index_d = new Array[Int](num_d)
@@ -123,9 +127,11 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
     }
 
     // calculate rmse
-    val train_rmse = calRMSE(root, train_data)
-    val valid_rmse = valid_data.map { points =>
-      calRMSE(root, points)
+    val train_rmse = evaluate(root, train_data)
+    val valid_rmse = if (null != valid_data) {
+      evaluate(root, valid_data)
+    } else {
+      null
     }
 
     // get time cost
@@ -133,11 +139,14 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
 
     // show logs
     val msg = Msg("RMSE(train)" -> train_rmse)
-    valid_rmse.foreach(msg.append("RMSE(valid)", _))
+    if (null != valid_data) {
+      msg.append("RMSE(valid)", valid_rmse)
+    }
     msg.append("time cost", time_cost)
     logInfo(msg.toString)
 
     new DecisionTreeModel(root,
+      feature_num,
       impurity,
       loss,
       max_depth,
@@ -155,11 +164,10 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
    * @param que_node nodes queue which stored the nodes need to be splited
    * @param num_f training data metadata and the strategy of the decision tree
    */
-  def findBestSplit(
-                     input: Array[RegPoint],
-                     index_d: Array[Int],
-                     que_node: mutable.Queue[(DecisionTreeNode, DecisionTreeStat)],
-                     num_f: Int): Unit = {
+  def findBestSplit(input: Seq[LabeledPoint],
+                    index_d: Array[Int],
+                    que_node: mutable.Queue[(DecisionTreeNode, DecisionTreeStat)],
+                    num_f: Int): Unit = {
 
     val (node, stat) = que_node.dequeue()
 
@@ -280,16 +288,16 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
   /**
    * Calculate the RMSE for the input data.
    * @param root Root node of the decision tree structure.
-   * @param input Input data represented as array of [[bda.common.obj.RegPoint]].
+   * @param input Input data represented as array of [[bda.common.obj.LabeledPoint]].
    * @return RMSE of the input data.
    */
-  def calRMSE(root: DecisionTreeNode, input: Array[RegPoint]): Double = {
-    val mse = input.map { case lp =>
+  def evaluate(root: DecisionTreeNode, input: Seq[LabeledPoint]): Double = {
+    val lps = input.map { case lp =>
       val pred = DecisionTreeModel.predict(lp.fs, root)
-      loss_calculator.computeError(pred, lp.label)
-    }.sum / input.length
+      (lp.label, pred)
+    }
 
-    math.sqrt(mse)
+    RMSE(lps)
   }
 }
 
@@ -313,32 +321,41 @@ private[tree] object DecisionTreeTrainer {
  * @param impurity_calculator Impurity calculator.
  * @param loss_calculator Loss calculator.
  */
-private[tree] class DecisionTreeModel(val root: DecisionTreeNode,
-                                      val impurity: Impurity,
-                                      val loss: Loss,
-                                      val max_depth: Int,
-                                      val min_node_size: Int,
-                                      val min_info_gain: Double,
-                                      val impurity_calculator: ImpurityCalculator,
-                                      val loss_calculator: LossCalculator) extends Serializable {
+@SerialVersionUID(6529125048396757390L)
+class DecisionTreeModel(val root: DecisionTreeNode,
+                        val feature_num: Int,
+                        val impurity: Impurity,
+                        val loss: Loss,
+                        val max_depth: Int,
+                        val min_node_size: Int,
+                        val min_info_gain: Double,
+                        val impurity_calculator: ImpurityCalculator,
+                        val loss_calculator: LossCalculator) extends Serializable {
 
-  private val serialVersionUID = 6529125048396757390L
+  /**
+   * Predict the value for the given data point using the model trained.
+   *
+   * @param fs features of the data point.
+   * @return predicted value.
+   */
+  def predict(fs: SparseVector[Double]): Double = {
+    DecisionTreeModel.predict(fs, root)
+  }
 
   /**
    * Predict values for the given data using the model trained.
-   * Statistic RMSE while predicting.
    *
-   * @param input Array of [[bda.common.obj.RegPoint]] represent true label and features of data points
-   * @return (Array stored prediction, RMSE)
+   * @param input Array of [[bda.common.obj.LabeledPoint]] represent true label and features of data points
+   * @return Array stored prediction
    */
-  def predict(input: Array[RegPoint]): (Array[Double], Double) = {
+  def predict(input: Seq[LabeledPoint]): Seq[Double] = {
     //val (pred, err) = computePredictAndError(input, 1.0)
 
     //Log.log("INFO", s"predict done, with mean error = ${err}")
 
     //pred
 
-    computePredictAndError(input, 1.0)
+    computePredict(input, 1.0)
   }
 
   /**
@@ -351,52 +368,39 @@ private[tree] class DecisionTreeModel(val root: DecisionTreeNode,
   }
 
   /**
-   * Predict values and get the mean error for the given data using the model trained and the model weight
+   * Predict values for the given data using the model trained and the model weight
    *
-   * @param input Array of [[bda.common.obj.RegPoint]] represent true label and features of data points
+   * @param input Array of [[bda.common.obj.LabeledPoint]] represent true label and features of data points
    * @param weight model weight
-   * @return Array stored prediction and the mean error
+   * @return Array stored prediction.
    */
-  def computePredictAndError(input: Array[RegPoint],
-                             weight: Double): (Array[Double], Double) = {
-    val err_counter = loss match {
-      case SquaredError => new SquaredErrorCounter()
-      case _ => throw new IllegalArgumentException(s"Did not recognize loss type: ${loss}")
-    }
+  def computePredict(input: Seq[LabeledPoint],
+                             weight: Double): Seq[Double] = {
 
     val pred = input.map { lp =>
       val pred = DecisionTreeModel.predict(lp.fs, root) * weight
-      err_counter :+= (pred, lp.label)
       pred
     }
 
-    (pred, err_counter.getMean)
+    pred
   }
 
   /**
-   * Update the pre-predictions and get the mean error for the given data using the model trained and the model weight
+   * Update the pre-predictions for the given data using the model trained and the model weight
    *
-   * @param input Array of [[bda.common.obj.RegPoint]] represent true label and features of data points
+   * @param input Array of [[bda.common.obj.LabeledPoint]] represent true label and features of data points
    * @param pre_pred pre-predictions
    * @param weight model weight
-   * @return Array stored prediction and the mean error
+   * @return Array stored prediction.
    */
-  def updatePredictAndError(input: Array[RegPoint],
-                            pre_pred: Array[Double],
-                            weight: Double): (Array[Double], Double) = {
+  def updatePredict(input: Seq[LabeledPoint],
+                    pre_pred: Seq[Double],
+                    weight: Double): Seq[Double] = {
 
-    val err_counter = loss match {
-      case SquaredError => new SquaredErrorCounter()
-      case _ => throw new IllegalArgumentException(s"Did not recognize loss type: ${loss}")
-    }
-
-    val pred = input.zip(pre_pred).map { case (lp, pre_pred) =>
+    input.zip(pre_pred).map { case (lp, pre_pred) =>
       val pred = pre_pred + DecisionTreeModel.predict(lp.fs, root) * weight
-      err_counter :+= (pred, lp.label)
       pred
     }
-
-    (pred, err_counter.getMean)
   }
 }
 

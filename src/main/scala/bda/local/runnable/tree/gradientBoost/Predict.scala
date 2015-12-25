@@ -1,7 +1,8 @@
 package bda.local.runnable.gradientBoost
 
+import bda.local.preprocess.Points
+import bda.common.util.io.writeLines
 import scopt.OptionParser
-import bda.local.reader.LibSVMFile
 import bda.local.model.tree.GradientBoostModel
 
 /**
@@ -35,6 +36,7 @@ object Predict {
         .text("directory of the Gradient Boost model")
         .action((x, c) => c.copy(model_pt = x))
       opt[String]("predict_pt")
+        .required()
         .text("directory of the prediction result")
         .action((x, c) => c.copy(predict_pt = x))
       note(
@@ -42,9 +44,9 @@ object Predict {
           |For example, the following command runs this app on your data set:
           |
           | java -jar out/artifacts/*/*.jar \
-          |   hdfs://bda00:8020/user/houjp/data/YourTestDataName
-          |   hdfs://bda00:8020/user/houjp/model/YourModelName
-          |   hdfs://bda00:8020/user/houjp/data/YourOutDataName
+          |   --test_pt ... \
+          |   --model_pt ... \
+          |   --predict_pt ...
         """.stripMargin)
     }
 
@@ -57,16 +59,12 @@ object Predict {
 
   def run(params: Params) {
 
-    // Load and parse the data file
-    val (test_data, train_fs_num) = {
-      val (data, num) = LibSVMFile.readAsReg(params.test_pt)
-      (data.toArray, num)
+    val model: GradientBoostModel = GradientBoostModel.load(params.model_pt)
+    val points =  Points.fromLibSVMFile(params.test_pt, model.feature_num)
+    val predictions = points.map { pn =>
+      val y = model.predict(pn.fs)
+      s"$y\t$pn"
     }
-
-    val gb_model = GradientBoostModel.load(params.model_pt)
-    val (predicions, err) = gb_model.predict(test_data)
-
-    // show RMSE
-    println(s"Prediction done, RMSE(test_data)=$err")
+    writeLines(params.predict_pt, predictions)
   }
 }

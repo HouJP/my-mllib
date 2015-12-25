@@ -1,10 +1,11 @@
 package bda.spark.model.tree
 
-import bda.common.obj.RegPoint
+import bda.common.obj.LabeledPoint
 import bda.common.linalg.immutable.SparseVector
 import bda.common.util.{Msg, Timer}
 import bda.common.Logging
 import bda.spark.model.tree.Impurity._
+import bda.spark.evaluate.Regression.RMSE
 import bda.spark.model.tree.Loss._
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
@@ -31,8 +32,9 @@ object DecisionTree {
    * @param min_info_gain Minimum information gain while spliting, default is 1e-6.
    * @return a [[bda.spark.model.tree.DecisionTreeModel]] instance.
    */
-  def train(train_data: RDD[RegPoint],
-            valid_data: Option[RDD[RegPoint]] = None,
+  def train(train_data: RDD[LabeledPoint],
+            valid_data: RDD[LabeledPoint] = null,
+            feature_num: Int = 0,
             impurity: String = "Variance",
             loss: String = "SquaredError",
             max_depth: Int = 10,
@@ -41,7 +43,8 @@ object DecisionTree {
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6): DecisionTreeModel = {
 
-    val model = new DecisionTreeTrainer(Impurity.fromString(impurity),
+    val model = new DecisionTreeTrainer(feature_num,
+      Impurity.fromString(impurity),
       Loss.fromString(loss),
       max_depth,
       max_bins,
@@ -64,7 +67,8 @@ object DecisionTree {
  * @param min_node_size Minimum number of instances in the leaf.
  * @param min_info_gain Minimum information gain while spliting.
  */
-private[tree] class DecisionTreeTrainer(impurity: Impurity,
+private[tree] class DecisionTreeTrainer(feature_num: Int,
+                                        impurity: Impurity,
                                         loss: Loss,
                                         max_depth: Int,
                                         max_bins: Int,
@@ -87,23 +91,23 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
   /**
    * Method to train a decision tree model over training data.
    *
-   * @param train_data Training data which represented as a RDD of [[bda.common.obj.RegPoint]].
-   * @param valid_data Validation data which represented as a RDD of [[bda.common.obj.RegPoint]] and can be none.
+   * @param train_data Training data which represented as a RDD of [[bda.common.obj.LabeledPoint]].
+   * @param valid_data Validation data which represented as a RDD of [[bda.common.obj.LabeledPoint]] and can be none.
    * @return A [[bda.spark.model.tree.DecisionTreeModel]] instance.
    */
-  def train(train_data: RDD[RegPoint],
-            valid_data: Option[RDD[RegPoint]] = None): DecisionTreeModel = {
+  def train(train_data: RDD[LabeledPoint],
+            valid_data: RDD[LabeledPoint]): DecisionTreeModel = {
 
     val timer = new Timer()
 
     // persist in the cache
     train_data.persist()
-    if (!valid_data.isEmpty) {
-      valid_data.get.persist()
+    if (null != valid_data) {
+      valid_data.persist()
     }
 
     val num_examples = train_data.count().toInt
-    val num_fs = train_data.take(1)(0).fs.size
+    val num_fs = feature_num
     val new_bins = math.min(max_bins, num_examples)
     val num_bins_all = Array.fill[Int](num_fs)(new_bins)
 
@@ -114,6 +118,11 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
       num_fs,
       num_examples,
       min_samples)
+
+    // println("HouJP >> test splits")
+    for (i <- 0 until splits.length) {
+      // println(s"feature#$i has ${splits(i).length} splits")
+    }
 
     // convert LabeledPoint to TreePoint which used bin-index instead of feature-value
     val dt_points: RDD[DecisionTreePoint] =
@@ -126,6 +135,7 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
     val root_count = num_examples
     val root_sum = dt_points.map(_.label).sum()
     val root_squared_sum = dt_points.map(p => p.label * p.label).sum()
+    root.count = root_count
     root.impurity = impurity_calculator.calculate(root_count, root_sum, root_squared_sum)
     root.predict = loss_calculator.predict(root_sum, root_count)
 
@@ -168,9 +178,11 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
     dt_points.unpersist()
 
     // calculate rmse
-    val train_rmse = calRMSE(root, train_data)
-    val valid_rmse = valid_data.map { points =>
-      calRMSE(root, points)
+    val train_rmse = evaluate(root, train_data)
+    val valid_rmse = if (null != valid_data) {
+      evaluate(root, valid_data)
+    } else {
+      null
     }
 
     // get time cost
@@ -178,11 +190,14 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
 
     // show logs
     val msg = Msg("RMSE(train)" -> train_rmse)
-    valid_rmse.foreach(msg.append("RMSE(valid)", _))
+    if (null != valid_data) {
+      msg.append("RMSE(valid)", valid_rmse)
+    }
     msg.append("time cost", time_cost)
     logInfo(msg.toString)
 
     new DecisionTreeModel(root,
+      feature_num: Int,
       impurity,
       loss,
       max_depth,
@@ -197,7 +212,7 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
   /**
    * Method to find best splits and bins for each features.
    *
-   * @param input Training data which represented as a RDD [[bda.common.obj.RegPoint]].
+   * @param input Training data which represented as a RDD [[bda.common.obj.LabeledPoint]].
    * @param new_bins Maximum possible number of bins.
    * @param num_bins_all Number of bins for each features.
    * @param num_features Number of features.
@@ -205,7 +220,7 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
    * @param min_samples Minimum possible number of samples.
    * @return A tuple of [[bda.spark.model.tree.DecisionTreeSplit]] and [[bda.spark.model.tree.DecisionTreeBin]].
    */
-  def findSplitsBins(input: RDD[RegPoint],
+  def findSplitsBins(input: RDD[LabeledPoint],
                      new_bins: Int,
                      num_bins_all: Array[Int],
                      num_features: Int,
@@ -397,15 +412,19 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
       val best_split = best_splits(index)
       val info_gain = node.impurity - best_split.weighted_impurity
       val split = bins(best_split.index_f)(best_split.index_b).high_split
-      if ((best_split.weighted_impurity >= min_info_gain)
+
+      // println(s"HouJP >> $node, l_cnt = ${best_split.l_cnt}, r_cnt = ${best_split.r_cnt}")
+
+      if (((node.impurity - best_split.weighted_impurity) >= min_info_gain)
         && (node.depth < max_depth)
-        && (best_split.l_cnt >= min_node_size)
-        && (best_split.r_cnt >= min_node_size)) {
+        && (node.count > min_node_size)) { // 判断min_node_size的方式是否合理？
+
+        // println("HouJP >> splitting ...")
 
         node.is_leaf = false
         node.split = Some(split)
-        node.generate_lchild(best_split.l_impurity, best_split.l_pred)
-        node.generate_rchild(best_split.r_impurity, best_split.r_pred)
+        node.generate_lchild(best_split.l_impurity, best_split.l_pred, best_split.l_cnt)
+        node.generate_rchild(best_split.r_impurity, best_split.r_pred, best_split.r_cnt)
       }
 
       index += 1
@@ -428,16 +447,17 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
   /**
    * Calculate the RMSE for the input data.
    * @param root Root node of the decision tree structure.
-   * @param input Input data represented as RDD of [[bda.common.obj.RegPoint]].
+   * @param input Input data represented as RDD of [[bda.common.obj.LabeledPoint]].
    * @return RMSE of the input data.
    */
-  def calRMSE(root: DecisionTreeNode, input: RDD[RegPoint]): Double = {
-    val mse = input.map { case lp =>
+  def evaluate(root: DecisionTreeNode, input: RDD[LabeledPoint]): Double = {
+    val lps = input.map { case lp =>
       val pred = DecisionTreeModel.predict(lp.fs, root)
-      loss_calculator.computeError(pred, lp.label)
-    }.mean()
+      // println(s"label = ${lp.label}, pred = $pred")
+      (lp.label, pred)
+    }
 
-    math.sqrt(mse)
+    RMSE(lps)
   }
 }
 
@@ -502,7 +522,8 @@ private[tree] object DecisionTreeTrainer {
  * @param impurity_calculator Impurity calculator.
  * @param loss_calculator Loss calculator.
  */
-private[tree] class DecisionTreeModel(val root: DecisionTreeNode,
+class DecisionTreeModel(val root: DecisionTreeNode,
+                                      val feature_num: Int,
                                       val impurity: Impurity,
                                       val loss: Loss,
                                       val max_depth: Int,
@@ -515,26 +536,20 @@ private[tree] class DecisionTreeModel(val root: DecisionTreeNode,
 
   /**
    * Predict values for the given data using the model trained.
-   * Statistic RMSE while predicting.
    *
-   * @param input Prediction data set which represented as a RDD of [[bda.common.obj.RegPoint]].
-   * @return (A RDD stored prediction, RMSE).
+   * @param input Prediction data set which represented as a RDD of [[bda.common.obj.LabeledPoint]].
+   * @return A RDD stored prediction.
    */
-  def predict(input: RDD[RegPoint]): (RDD[Double], Double) = {
+  def predict(input: RDD[LabeledPoint]): RDD[Double] = {
     val root = this.root
     val loss = this.loss_calculator
 
-    val pred_err = input.map { case lp =>
+    input.map { case lp =>
       val pred = DecisionTreeModel.predict(lp.fs, root)
-      val err = loss.computeError(pred, lp.label)
-      (pred, err)
+      pred
     }
 
-    val err = pred_err.values.mean()
-
     //Log.log("INFO", s"predict done, with RMSE = ${math.sqrt(err)}")
-
-    (pred_err.keys, math.sqrt(err))
   }
 
   /**
@@ -547,6 +562,20 @@ private[tree] class DecisionTreeModel(val root: DecisionTreeNode,
 
     val model_rdd = sc.makeRDD(Seq(this))
     model_rdd.saveAsObjectFile(pt)
+  }
+
+  def showStructure: Unit = {
+    val node_que = new mutable.Queue[DecisionTreeNode]()
+    node_que.enqueue(root)
+    while (node_que.nonEmpty) {
+
+      if (!node_que.head.is_leaf) {
+        node_que.enqueue(node_que.head.left_child.get)
+        node_que.enqueue(node_que.head.right_child.get)
+      }
+
+      node_que.dequeue()
+    }
   }
 }
 
@@ -596,13 +625,13 @@ private[tree] object DecisionTreePoint {
 
   /**
    * Convert input to a RDD of [[bda.spark.model.tree.DecisionTreePoint]].
-   * @param input A RDD of [[bda.common.obj.RegPoint]].
+   * @param input A RDD of [[bda.common.obj.LabeledPoint]].
    * @param bins Bins of all features.
    * @param num_bins_all Number of bins of all features.
    * @param num_fs Number of features.
    * @return A RDD of [[bda.spark.model.tree.DecisionTreePoint]].
    */
-  def convertToDecisionTreeRDD(input: RDD[RegPoint],
+  def convertToDecisionTreeRDD(input: RDD[LabeledPoint],
                                bins: Array[Array[DecisionTreeBin]],
                                num_bins_all: Array[Int],
                                num_fs: Int): RDD[DecisionTreePoint] = {
@@ -613,13 +642,13 @@ private[tree] object DecisionTreePoint {
 
   /**
    * Convert a data point into [[bda.spark.model.tree.DecisionTreePoint]].
-   * @param lp A [[bda.common.obj.RegPoint]] instance.
+   * @param lp A [[bda.common.obj.LabeledPoint]] instance.
    * @param bins Bins of all features.
    * @param num_bins_all Number of bins of all features.
    * @param num_fs Number of fetures.
    * @return A [[bda.spark.model.tree.DecisionTreePoint]] instance.
    */
-  def convertToDecisionTreePoint(lp: RegPoint,
+  def convertToDecisionTreePoint(lp: LabeledPoint,
                          bins: Array[Array[DecisionTreeBin]],
                          num_bins_all: Array[Int],
                          num_fs: Int): DecisionTreePoint = {
@@ -677,7 +706,7 @@ private[tree] object DecisionTreePoint {
  * @param depth Node depth in a tree, 0-based.
  */
 private[tree] class DecisionTreeNode (val id: Int,
-                        val depth: Int) extends Serializable {
+                                      val depth: Int) extends Serializable {
 
   /** flag to show whether is a leaf-node */
   var is_leaf: Boolean = true
@@ -691,6 +720,8 @@ private[tree] class DecisionTreeNode (val id: Int,
   var left_child: Option[DecisionTreeNode] = None
   /** right child */
   var right_child: Option[DecisionTreeNode] = None
+  /** number of train set at this node */
+  var count = 0
 
   /**
    * Convert this node into a string.
@@ -698,7 +729,7 @@ private[tree] class DecisionTreeNode (val id: Int,
    * @return A string which represented this node.
    */
   override def toString: String = {
-    s"Node: id = $id, predict = $predict, impurity = $impurity"
+    s"Node: id = $id, depth = $depth, predict = $predict, count = $count, impurity = $impurity, split = {${split.getOrElse("None")}}"
   }
 
   /**
@@ -706,8 +737,9 @@ private[tree] class DecisionTreeNode (val id: Int,
    * @param l_impurity impurity value of left child of this node.
    * @param l_pred prediction value of left child of this node.
    */
-  def generate_lchild(l_impurity: Double, l_pred: Double): Unit = {
+  def generate_lchild(l_impurity: Double, l_pred: Double, l_cnt: Int): Unit = {
     left_child = Some(DecisionTreeNode.empty(id << 1, depth + 1))
+    left_child.get.count = l_cnt
     left_child.get.impurity = l_impurity
     left_child.get.predict = l_pred
   }
@@ -717,8 +749,9 @@ private[tree] class DecisionTreeNode (val id: Int,
    * @param r_impurity impurity value of right child of this node.
    * @param r_pred prediction value of right child of this node.
    */
-  def generate_rchild(r_impurity: Double, r_pred: Double): Unit = {
+  def generate_rchild(r_impurity: Double, r_pred: Double, r_cnt: Int): Unit = {
     right_child = Some(DecisionTreeNode.empty(id << 1 | 1, depth + 1))
+    right_child.get.count = r_cnt
     right_child.get.impurity = r_impurity
     right_child.get.predict = r_pred
   }

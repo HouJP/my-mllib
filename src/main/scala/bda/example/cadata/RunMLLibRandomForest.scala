@@ -1,27 +1,18 @@
-package bda.spark.runnable.gradientBoost
+package bda.example.cadata
 
-import bda.spark.preprocess.Points
-import bda.common.obj.LabeledPoint
+import org.apache.spark.mllib.tree.RandomForest
+import org.apache.spark.mllib.util.MLUtils
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
-import bda.spark.model.tree.{GradientBoostModel, GradientBoost}
-import org.apache.log4j.{Level, Logger}
 
 /**
- * Command line runner for spark gradient boost.
- *
- * Input:
- * - train_pt format: label fid1:v1 fid2:v2 ...
- * Both label and v are doubles, fid are integers starting from 1.
+ * An example app for GradientBoost on cadata data set(https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/regression.html#cadata).
+ * The cadata dataset can ben found at `testData/regression/cadata/`.
+ * If you use it as a template to create your own app, please use `spark-submit` to submit your app.
  */
-object Train {
-
-  /** command line parameters */
-  case class Params(train_pt: String = "",
-                    valid_pt: String = "",
-                    model_pt: String = "",
-                    cp_dir: String = "",
-                    feature_num: Int = 0,
+object RunMLLibRandomForest {
+  case class Params(train_pt: String = "/Users/hugh_627/ICT/bda/testData/regression/cadata/cadata.train",
+                    feature_num: Int = 8,
                     impurity: String = "Variance",
                     loss: String = "SquaredError",
                     max_depth: Int = 10,
@@ -29,19 +20,15 @@ object Train {
                     min_samples: Int = 10000,
                     min_node_size: Int = 15,
                     min_info_gain: Double = 1e-6,
-                    num_iter: Int = 20,
+                    num_iter: Int = 50,
                     learn_rate: Double = 0.02,
                     min_step: Double = 1e-5)
 
   def main(args: Array[String]) {
-    // do not show log info
-    Logger.getLogger("org").setLevel(Level.WARN)
-    Logger.getLogger("aka").setLevel(Level.WARN)
-
     val default_params = Params()
 
     val parser = new OptionParser[Params]("RunSparkGradientBoost") {
-      head("RunSparkGradientBoost: an example app for GradientBoost.")
+      head("RunSparkGradientBoost: an example app for Gradient Boost on cadata data.")
       opt[String]("impurity")
         .text(s"impurity of each node, default: ${default_params.impurity}")
         .action((x, c) => c.copy(impurity = x))
@@ -72,37 +59,25 @@ object Train {
       opt[Double]("min_step")
         .text(s"minimum step, default: ${default_params.min_step}")
         .action((x, c) => c.copy(min_step = x))
-      opt[String]("train_pt").required()
-        .text("input paths to the training dataset in LibSVM format")
-        .action((x, c) => c.copy(train_pt = x))
-      opt[String]("valid_pt")
-        .text("input paths to the validation dataset in LibSVM format")
-        .action((x, c) => c.copy(valid_pt = x))
-      opt[String]("model_pt")
-        .text("directory of the decision tree model")
-        .action((x, c) => c.copy(model_pt = x))
-      opt[String]("cp_dir").required()
-        .text("directory of checkpoint")
-        .action((x, c) => c.copy(cp_dir = x))
-      opt[Int]("feature_num").required()
+      opt[Int]("feature_num")
         .text(s"number of features, default: ${default_params.feature_num}")
         .action((x, c) => c.copy(feature_num = x))
+      opt[String]("train_pt")
+        .text("path to the cadata training dataset in LibSVM format")
+        .action((x, c) => c.copy(train_pt = x))
       note(
         """
-          |For example, the following command runs this app on your data set:
+          |For example, the following command runs this app on the cadata dataset:
           |
-          | bin/spark-submit --class bda.runnable.tree.gradientBoost.Train \
+          | bin/spark-submit --class bda.example.tree.RunSparkGradientBoost \
           |   out/artifacts/*/*.jar \
           |   --impurity "Variance" --loss "SquaredError" \
           |   --max_depth 10 --max_bins 32 \
           |   --min_samples 10000 --min_node_size 15 \
           |   --min_info_gain 1e-6 --num_iter 50\
           |   --learn_rate 0.02 --min_step 1e-5 \
-          |   --feature_num 10 \
-          |   --train_pt ...
-          |   --valid_pt ...
-          |   --model_pt ...
-          |   --cp_dir ...
+          |   --feature_num 8 \
+          |   --data_dir ...
         """.stripMargin)
     }
 
@@ -114,41 +89,32 @@ object Train {
   }
 
   def run(params: Params) {
-    val conf = new SparkConf().setAppName(s"Spark Gradient Boost Training")//.setMaster("local")
+    val conf = new SparkConf().setAppName(s"Spark Random Forest Training of cadata dataset").setMaster("local")
     val sc = new SparkContext(conf)
-    sc.setCheckpointDir(params.cp_dir)
 
-    val points = Points.fromLibSVMFile(sc, params.train_pt, params.feature_num)
+    val data = MLUtils.loadLibSVMFile(sc, params.train_pt)
 
-    // prepare training and validate datasets
-    val (train_points, valid_points) = if (!params.valid_pt.isEmpty) {
-      val points2 = Points.fromLibSVMFile(sc, params.valid_pt, params.feature_num)
-      (points, points2)
-    } else {
-      // train without validation
-      (points, null)
-    }
+    // 分类数
+    val numClasses = 0
+    // categricalFeaturesInfo
+    val categoricalFeaturesInfo = Map[Int, Int]()
+    // 树的个数
+    val numTrees: Int = 3
+    val featureSubsetStrategy = "auto"
 
-    train_points.cache()
-    if (valid_points != null) valid_points.cache()
-
-    val model: GradientBoostModel = GradientBoost.train(
-      train_points,
-      valid_points,
-      params.feature_num,
-      params.impurity,
-      params.loss,
-      params.max_depth,
-      params.max_bins,
-      params.min_samples,
-      params.min_node_size,
-      params.min_info_gain,
-      params.num_iter,
-      params.learn_rate,
-      params.min_step)
-
-    if (!params.model_pt.isEmpty) {
-      model.save(sc, params.model_pt)
-    }
+    //纯度计算
+    val impurity = "gini"
+    //树的最大层次
+    val maxDepth = 4
+    //特征最大装箱数
+    val maxBins = 32
+    //训练随机森林分类器，trainClassifier 返回的是 RandomForestModel 对象
+    val model = RandomForest.trainClassifier(data, numClasses, categoricalFeaturesInfo,
+      numTrees, featureSubsetStrategy, impurity, maxDepth, maxBins)
+    //    val train = Points.fromLibSVMFile(sc, params.data_dir + "/cadata.train", params.feature_num)
+    //    val test = Points.fromLibSVMFile(sc, params.data_dir + "/cadata.test", params.feature_num)
+    val fs = data.map(_.features)
+    model.predict(fs)
   }
+
 }

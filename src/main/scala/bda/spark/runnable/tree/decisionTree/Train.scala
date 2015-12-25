@@ -1,9 +1,9 @@
 package bda.spark.runnable.decisionTree
 
+import bda.spark.preprocess.Points
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
-import bda.spark.reader.LibSVMFile
-import bda.spark.model.tree.DecisionTree
+import bda.spark.model.tree.{DecisionTreeModel, DecisionTree}
 
 /**
  * Command line runner for spark decision tree.
@@ -18,6 +18,7 @@ object Train {
   case class Params(train_pt: String = "",
                     valid_pt: String = "",
                     model_pt: String = "",
+                    feature_num: Int = 0,
                     impurity: String = "Variance",
                     loss: String = "SquaredError",
                     max_depth: Int = 10,
@@ -52,7 +53,10 @@ object Train {
       opt[Double]("min_info_gain")
         .text(s"minimum information gain, default: ${default_params.min_info_gain}")
         .action((x, c) => c.copy(min_info_gain = x))
-      opt[String]("train_pt")
+      opt[Int]("feature_num").required()
+        .text(s"number of features, default: ${default_params.feature_num}")
+        .action((x, c) => c.copy(feature_num = x))
+      opt[String]("train_pt").required()
         .text("input paths to the training dataset in LibSVM format")
         .action((x, c) => c.copy(train_pt = x))
       opt[String]("valid_pt")
@@ -65,15 +69,16 @@ object Train {
         """
           |For example, the following command runs this app on your data set:
           |
-          | bin/spark-submit --class bda.example.tree.RunSparkDecisionTree \
+          | bin/spark-submit --class bda.runnable.tree.decisionTree.Train \
           |   out/artifacts/*/*.jar \
           |   --impurity "Variance" --loss "SquaredError" \
           |   --max_depth 10 --max_bins 32 \
           |   --min_samples 10000 --min_node_size 15 \
           |   --min_info_gain 1e-6 \
-          |   --train_pt hdfs://bda00:8020/user/houjp/data/YourTrainingData/
-          |   --valid_pt hdfs://bda00:8020/user/houjp/data/YourValidationData/
-          |   --model_pt hdfs://bda00:8020/user/houjp/model/YourModelName/
+          |   --feature_num 10 \
+          |   --train_pt ... \
+          |   --valid_pt ... \
+          |   --model_pt ...
         """.stripMargin)
     }
 
@@ -85,21 +90,27 @@ object Train {
   }
 
   def run(params: Params) {
-    val conf = new SparkConf().setAppName(s"Spark Decision Tree Training").setMaster("local[2]")
+    val conf = new SparkConf().setAppName(s"Spark Decision Tree Training")//.setMaster("local")
     val sc = new SparkContext(conf)
 
-    // Load and parse the data file
-    val (train_data, train_fs_num) = LibSVMFile.readAsReg(sc, params.train_pt)
-    val (valid_data, valid_fs_num) = params.valid_pt.isEmpty match {
-      case true => (None, 0)
-      case false => {
-        val (data, num) = LibSVMFile.readAsReg(sc, params.valid_pt)
-        (Some(data), Some(num))
-      }
+    val points = Points.fromLibSVMFile(sc, params.train_pt, params.feature_num)
+
+    // prepare training and validate datasets
+    val (train_points, valid_points) = if (!params.valid_pt.isEmpty) {
+      val points2 = Points.fromLibSVMFile(sc, params.valid_pt, params.feature_num)
+      (points, points2)
+    } else {
+      // train without validation
+      (points, null)
     }
 
-    val dt_model = DecisionTree.train(train_data,
-      valid_data,
+    train_points.cache()
+    if (valid_points != null) valid_points.cache()
+
+    val model: DecisionTreeModel = DecisionTree.train(
+      train_points,
+      valid_points,
+      params.feature_num,
       params.impurity,
       params.loss,
       params.max_depth,
@@ -109,7 +120,7 @@ object Train {
       params.min_info_gain)
 
     if (!params.model_pt.isEmpty) {
-      dt_model.save(sc, params.model_pt)
+      model.save(sc, params.model_pt)
     }
   }
 }

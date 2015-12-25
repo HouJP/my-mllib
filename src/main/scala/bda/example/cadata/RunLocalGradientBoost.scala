@@ -1,8 +1,8 @@
 package bda.example.cadata
 
+import bda.local.preprocess.Points
 import scopt.OptionParser
-import bda.local.reader.LibSVMFile
-import bda.local.model.tree.GradientBoost
+import bda.local.model.tree.{GradientBoostModel, GradientBoost}
 
 /**
  * An example app for GradientBoost on cadata data set(https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/regression.html#cadata).
@@ -10,7 +10,7 @@ import bda.local.model.tree.GradientBoost
  */
 object RunLocalGradientBoost {
   case class Params(data_dir: String = "/Users/hugh_627/ICT/bda/testData/regression/cadata/",
-                    cp_dir: String = "",
+                    feature_num: Int = 8,
                     impurity: String = "Variance",
                     loss: String = "SquaredError",
                     max_depth: Int = 10,
@@ -49,12 +49,12 @@ object RunLocalGradientBoost {
       opt[Double]("min_step")
         .text(s"minimum step, default: ${default_params.min_step}")
         .action((x, c) => c.copy(min_step = x))
+      opt[Double]("feature_num")
+        .text(s"number of features, default: ${default_params.feature_num}")
+        .action((x, c) => c.copy(min_step = x))
       opt[String]("data_dir")
         .text("path to the cadata dataset in LibSVM format")
         .action((x, c) => c.copy(data_dir = x))
-      opt[String]("cp_dir")
-        .text("directory of checkpoint")
-        .action((x, c) => c.copy(cp_dir = x))
       note(
         """
           |For example, the following command runs this app on the cadata dataset:
@@ -65,8 +65,8 @@ object RunLocalGradientBoost {
           |   --min_samples 10000 --min_node_size 15 \
           |   --min_info_gain 1e-6 --num_iter 50\
           |   --learn_rate 0.02 --min_step 1e-5 \
-          |   --data_dir /user/bda/testData/regression/cadata/
-          |   --cp_dir /user/bda/checkpoint/
+          |   --feature_num 8 \
+          |   --data_dir ...
         """.stripMargin)
     }
 
@@ -79,22 +79,19 @@ object RunLocalGradientBoost {
 
   def run(params: Params) {
 
-    // Load and parse the data file
-    val (train_data, train_fs_num) = {
-      val (data, num) = LibSVMFile.readAsReg(params.data_dir + "cadata.train")
-      (data.toArray, num)
-    }
-    val (valid_data, valid_fs_num) = {
-      val (data, num) = LibSVMFile.readAsReg(params.data_dir + "cadata.test")
-      (Some(data.toArray), Some(num))
-    }
+    val train = Points.fromLibSVMFile(params.data_dir + "/cadata.train", params.feature_num).toSeq
+    val test = Points.fromLibSVMFile(params.data_dir + "/cadata.test", params.feature_num).toSeq
 
-    val dt_model = GradientBoost.train(train_data,
-      valid_data,
+    val model: GradientBoostModel = GradientBoost.train(train,
+      test,
+      params.feature_num,
       params.impurity,
       params.loss,
       params.max_depth,
       params.min_node_size,
-      params.min_info_gain)
+      params.min_info_gain,
+      params.num_iter,
+      params.learn_rate,
+      params.min_step)
   }
 }

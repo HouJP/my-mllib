@@ -1,9 +1,9 @@
 package bda.spark.runnable.gradientBoost
 
 
+import bda.spark.preprocess.Points
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
-import bda.spark.reader.LibSVMFile
 import bda.spark.model.tree.GradientBoostModel
 
 /**
@@ -28,26 +28,23 @@ object Predict {
 
     val parser = new OptionParser[Params]("RunSparkGradientBoost") {
       head("RunSparkGradientBoost: an example app for Gradient Boost on your data.")
-      opt[String]("test_pt")
-        .required()
+      opt[String]("test_pt").required()
         .text("input paths to the dataset in LibSVM format")
         .action((x, c) => c.copy(test_pt = x))
-      opt[String]("model_pt")
-        .required()
+      opt[String]("model_pt").required()
         .text("directory of the Gradient Boost model")
         .action((x, c) => c.copy(model_pt = x))
-      opt[String]("predict_pt")
-        .required()
+      opt[String]("predict_pt").required()
         .text("directory of the prediction result")
         .action((x, c) => c.copy(predict_pt = x))
       note(
         """
           |For example, the following command runs this app on your data set:
           |
-          | bin/spark-submit --class bda.example.tree.RunSparkGradientBoost \
-          |   hdfs://bda00:8020/user/houjp/data/YourTestDataName
-          |   hdfs://bda00:8020/user/houjp/model/YourModelName
-          |   hdfs://bda00:8020/user/houjp/data/YourOutDataName
+          | bin/spark-submit --class bda.runnable.tree.gradientBoost.Predict \
+          |   test_pt ... \
+          |   model_pt ... \
+          |   predict_pt ...
         """.stripMargin)
     }
 
@@ -59,16 +56,15 @@ object Predict {
   }
 
   def run(params: Params) {
-    val conf = new SparkConf().setAppName(s"Spark Gradient Boost Prediction").setMaster("local[2]")
+    val conf = new SparkConf().setAppName(s"Spark Gradient Boost Prediction")//.setMaster("local")
     val sc = new SparkContext(conf)
 
-    // Load and parse the data file
-    val (test_data, train_fs_num) = LibSVMFile.readAsReg(sc, params.test_pt)
+    val model: GradientBoostModel = GradientBoostModel.load(sc, params.model_pt)
+    val points = Points.fromLibSVMFile(sc, params.test_pt, model.feature_num).cache()
 
-    val gb_model = GradientBoostModel.load(sc, params.model_pt)
-    val (predicions, err) = gb_model.predict(test_data)
-
-    // show RMSE
-    println(s"Prediction done, RMSE(test-data)=$err")
+    val predictions = model.predict(points).zip(points).map {
+      case (y, pn) => s"$y\t$pn"
+    }
+    predictions.saveAsTextFile(params.predict_pt)
   }
 }

@@ -1,8 +1,8 @@
 package bda.local.runnable.decisionTree
 
+import bda.local.preprocess.Points
 import scopt.OptionParser
-import bda.local.reader.LibSVMFile
-import bda.local.model.tree.DecisionTree
+import bda.local.model.tree.{DecisionTreeModel, DecisionTree}
 
 /**
  * Command line runner for local decision tree.
@@ -20,6 +20,7 @@ object Train {
                     impurity: String = "Variance",
                     loss: String = "SquaredError",
                     max_depth: Int = 10,
+                    feature_num: Int = 0,
                     min_node_size: Int = 15,
                     min_info_gain: Double = 1e-6)
 
@@ -43,7 +44,10 @@ object Train {
       opt[Double]("min_info_gain")
         .text(s"minimum information gain, default: ${default_params.min_info_gain}")
         .action((x, c) => c.copy(min_info_gain = x))
-      opt[String]("train_pt")
+      opt[Int]("feature_num").required()
+        .text(s"num of features, default: ${default_params.feature_num}")
+        .action((x, c) => c.copy(feature_num = x))
+      opt[String]("train_pt").required()
         .text("input paths to the training dataset in LibSVM format")
         .action((x, c) => c.copy(train_pt = x))
       opt[String]("valid_pt")
@@ -61,9 +65,10 @@ object Train {
           |   --max_depth 10 --max_bins 32 \
           |   --min_samples 10000 --min_node_size 15 \
           |   --min_info_gain 1e-6 \
-          |   --train_pt /user/houjp/data/YourTrainingData/
-          |   --valid_pt /user/houjp/data/YourValidationData/
-          |   --model_pt /user/houjp/model/YourModelName/
+          |   --feature_num 10 \
+          |   --train_pt ... \
+          |   --valid_pt ... \
+          |   --model_pt ...
         """.stripMargin)
     }
 
@@ -75,30 +80,27 @@ object Train {
   }
 
   def run(params: Params) {
+    val points = Points.fromLibSVMFile(params.train_pt, params.feature_num).toSeq
 
-    // Load and parse the data file
-    val (train_data, train_fs_num) = {
-      val (data, num) = LibSVMFile.readAsReg(params.train_pt)
-      (data.toArray, num)
-    }
-    val (valid_data, valid_fs_num) = params.valid_pt.isEmpty match {
-      case true => (None, 0)
-      case false => {
-        val (data, num) = LibSVMFile.readAsReg(params.valid_pt)
-        (Some(data.toArray), Some(num))
-      }
+    // prepare training and validate datasets
+    val (train, test) = if (!params.valid_pt.isEmpty) {
+      val points2 = Points.fromLibSVMFile(params.valid_pt, params.feature_num).toSeq
+      (points, points2)
+    } else {
+      // train without validation
+      (points, null)
     }
 
-    val dt_model = DecisionTree.train(train_data,
-      valid_data,
+    val model: DecisionTreeModel = DecisionTree.train(train,
+      test,
+      params.feature_num,
       params.impurity,
       params.loss,
       params.max_depth,
       params.min_node_size,
       params.min_info_gain)
 
-    if (!params.model_pt.isEmpty) {
-      dt_model.save(params.model_pt)
-    }
+    if (!params.model_pt.isEmpty)
+      model.save(params.model_pt)
   }
 }

@@ -1,3 +1,4 @@
+
 .idea/
 .idea/*
 
@@ -12,3 +13,14 @@ project/target/*
 
 project/project/target
 project/project/target/*
+
+bin
+bin/*
+
+conf
+conf/*
+
+out
+out/*
+
+.gitignore

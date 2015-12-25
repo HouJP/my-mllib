@@ -1,8 +1,8 @@
 package bda.local.runnable.gradientBoost
 
+import bda.local.preprocess.Points
 import scopt.OptionParser
-import bda.local.reader.LibSVMFile
-import bda.local.model.tree.GradientBoost
+import bda.local.model.tree.{GradientBoostModel, GradientBoost}
 
 /**
  * Command line runner for spark gradient boost.
@@ -24,7 +24,8 @@ object Train {
                     min_info_gain: Double = 1e-6,
                     num_iter: Int = 20,
                     learn_rate: Double = 0.02,
-                    min_step: Double = 1e-5)
+                    min_step: Double = 1e-5,
+                    feature_num: Int = 0)
 
   def main(args: Array[String]) {
     val default_params = Params()
@@ -55,7 +56,10 @@ object Train {
       opt[Double]("min_step")
         .text(s"minimum step, default: ${default_params.min_step}")
         .action((x, c) => c.copy(min_step = x))
-      opt[String]("train_pt")
+      opt[Int]("feature_num").required()
+        .text(s"number of features, default: ${default_params.feature_num}")
+        .action((x, c) => c.copy(feature_num = x))
+      opt[String]("train_pt").required()
         .text("input paths to the training dataset in LibSVM format")
         .action((x, c) => c.copy(train_pt = x))
       opt[String]("valid_pt")
@@ -74,9 +78,9 @@ object Train {
           |   --min_samples 10000 --min_node_size 15 \
           |   --min_info_gain 1e-6 --num_iter 50\
           |   --learn_rate 0.02 --min_step 1e-5 \
-          |   --train_pt /user/houjp/data/YourTrainingData/
-          |   --valid_pt /user/houjp/data/YourValidationData/
-          |   --model_pt /user/houjp/model/YourModelName/
+          |   --train_pt ... \
+          |   --valid_pt ... \
+          |   --model_pt ...
         """.stripMargin)
     }
 
@@ -88,22 +92,20 @@ object Train {
   }
 
   def run(params: Params) {
+    val points = Points.fromLibSVMFile(params.train_pt, params.feature_num).toSeq
 
-    // Load and parse the data file
-    val (train_data, train_fs_num) = {
-      val (data, num) = LibSVMFile.readAsReg(params.train_pt)
-      (data.toArray, num)
-    }
-    val (valid_data, valid_fs_num) = params.valid_pt.isEmpty match {
-      case true => (None, 0)
-      case false => {
-        val (data, num) = LibSVMFile.readAsReg(params.valid_pt)
-        (Some(data.toArray), Some(num))
-      }
+    // prepare training and validate datasets
+    val (train, test) = if (!params.valid_pt.isEmpty) {
+      val points2 = Points.fromLibSVMFile(params.valid_pt, params.feature_num).toSeq
+      (points, points2)
+    } else {
+      // train without validation
+      (points, null)
     }
 
-    val dt_model = GradientBoost.train(train_data,
-      valid_data,
+    val model: GradientBoostModel = GradientBoost.train(train,
+      test,
+      params.feature_num,
       params.impurity,
       params.loss,
       params.max_depth,
@@ -113,8 +115,7 @@ object Train {
       params.learn_rate,
       params.min_step)
 
-    if (!params.model_pt.isEmpty) {
-      dt_model.save(params.model_pt)
-    }
+    if (!params.model_pt.isEmpty)
+      model.save(params.model_pt)
   }
 }

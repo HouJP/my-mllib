@@ -1,12 +1,13 @@
 package bda.local.model.tree
 
-import bda.common.obj.RegPoint
+import bda.common.obj.LabeledPoint
 import bda.common.util.io
 import bda.common.linalg.immutable.SparseVector
 import bda.common.util.{Msg, Timer}
 import bda.common.Logging
 import bda.local.model.tree.Impurity._
 import bda.local.model.tree.Loss._
+import bda.local.evaluate.Regression.RMSE
 
 /**
  * External interface of GBDT in standalone.
@@ -28,8 +29,9 @@ object GradientBoost {
    * @param min_step Minimum step of each iteration, or stop it.
    * @return a [[bda.local.model.tree.GradientBoostModel]] instance.
    */
-  def train(train_data: Array[RegPoint],
-            valid_data: Option[Array[RegPoint]] = None,
+  def train(train_data: Seq[LabeledPoint],
+            valid_data: Seq[LabeledPoint] = null,
+            feature_num: Int = 0,
             impurity: String = "Variance",
             loss: String = "SquaredError",
             max_depth: Int = 10,
@@ -39,7 +41,8 @@ object GradientBoost {
             learn_rate: Double = 0.02,
             min_step: Double = 1e-5): GradientBoostModel = {
 
-    new GradientBoostTrainer(Impurity.fromString(impurity),
+    new GradientBoostTrainer(feature_num,
+      Impurity.fromString(impurity),
       Loss.fromString(loss),
       max_depth,
       min_node_size,
@@ -62,7 +65,8 @@ object GradientBoost {
  * @param learn_rate Value of learning rate.
  * @param min_step Minimum step of each iteration, or stop it.
  */
-private[tree] class GradientBoostTrainer(impurity: Impurity,
+private[tree] class GradientBoostTrainer(feature_num: Int,
+                                         impurity: Impurity,
                                          loss: Loss,
                                          max_depth: Int,
                                          min_node_size: Int,
@@ -84,16 +88,15 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
   }
 
   /**
-   * Method to train a gradient boosting model over a training data which represented as an array of [[bda.common.obj.RegPoint]].
+   * Method to train a gradient boosting model over a training data which represented as an array of [[bda.common.obj.LabeledPoint]].
    *
    * @param train_data Training data points.
    * @param valid_data Validation data points.
    * @return a [[bda.local.model.tree.GradientBoostModel]] instance which can be used to predict.
    */
-  def train(train_data: Array[RegPoint], valid_data: Option[Array[RegPoint]]): GradientBoostModel = {
+  def train(train_data: Seq[LabeledPoint], valid_data: Seq[LabeledPoint]): GradientBoostModel = {
     val size = train_data.length
     var train_new_data = train_data
-    var valid_new_data = valid_data
 
     val wk_learners = new Array[DecisionTreeNode](num_iter)
 
@@ -102,24 +105,31 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
     var pre_time_cost = 0L
 
     // building weak learner #0
-    val wl0 = new DecisionTreeTrainer(impurity,
+    val wl0 = new DecisionTreeTrainer(feature_num,
+      impurity,
       loss,
       max_depth,
       min_node_size,
-      min_info_gain).train(train_new_data, None)
+      min_info_gain).train(train_new_data, null)
     wk_learners(0) = wl0.root
 
     // compute prediction and error of training dataset
-    var train_pred_err = wl0.computePredictAndError(train_data, learn_rate)
-    var train_pred = train_pred_err._1
-    var train_err = train_pred_err._2
+    var train_pred = wl0.computePredict(train_data, 1.0)
+    var train_rmse = evaluate(train_data.map(_.label), train_pred)
 
     // compute prediction and error of validation dataset
-    var valid_pred_err = valid_data.map(wl0.computePredictAndError(_, learn_rate))
-    var valid_pred = valid_pred_err.map(_._1)
-    var valid_err = valid_pred_err.map(_._2)
+    var valid_pred = if (null != valid_data) {
+      wl0.computePredict(valid_data, 1.0)
+    } else {
+      null
+    }
+    var valid_rmse = if (null != valid_data) {
+      evaluate(valid_data.map(_.label), valid_pred)
+    } else {
+      null
+    }
 
-    var min_err = train_err
+    var min_err = train_rmse
     var best_iter = 1
 
     var tol_time_cost = timer.cost()
@@ -128,13 +138,15 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
     cost_count += 1
 
     // show logs
-    var msg = Msg("Iter" -> cost_count, "RMSE(train)" -> train_err)
-    valid_err.foreach(msg.append("RMSE(valid)", _))
+    var msg = Msg("Iter" -> cost_count, "RMSE(train)" -> train_rmse)
+    if (null != valid_data) {
+      msg.append("RMSE(valid)", valid_rmse)
+    }
     msg.append("time cost", now_time_cost)
     logInfo(msg.toString)
 
     train_new_data = train_pred.zip(train_data).map { case (predict, lp) =>
-      RegPoint(-1.0 * loss_calculator.gradient(predict, lp.label), lp.fs)
+      LabeledPoint(-1.0 * loss_calculator.gradient(predict, lp.label), lp.fs)
     }
 
     var iter = 1
@@ -142,25 +154,26 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
       val begin_t = System.nanoTime()
 
       // building weak leaner #iter
-      val wl = new DecisionTreeTrainer(impurity,
+      val wl = new DecisionTreeTrainer(feature_num,
+        impurity,
         loss,
         max_depth,
         min_node_size,
-        min_info_gain).train(train_new_data, None)
+        min_info_gain).train(train_new_data, null)
       wk_learners(iter) = wl.root
 
       // compute prediction and error for training data
-      train_pred_err = wl.updatePredictAndError(train_data, train_pred, learn_rate)
-      train_pred = train_pred_err._1
-      train_err = train_pred_err._2
+      train_pred = wl.updatePredict(train_data, train_pred, learn_rate)
+      train_rmse = evaluate(train_data.map(_.label), train_pred)
 
       // compute prediction and error for validation data
-      valid_pred_err = valid_data.map(wl.updatePredictAndError(_, valid_pred.get, learn_rate))
-      valid_pred = valid_pred_err.map(_._1)
-      valid_err = valid_pred_err.map(_._2)
+      if (null != valid_data) {
+        valid_pred = wl.updatePredict(valid_data, valid_pred, learn_rate)
+        valid_rmse = evaluate(valid_data.map(_.label), valid_pred)
+      }
 
       // compute mean error
-      val current_err = train_err
+      val current_err = train_rmse
 
       tol_time_cost = timer.cost()
       now_time_cost = tol_time_cost - pre_time_cost
@@ -168,14 +181,18 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
       cost_count += 1
 
       // show logs
-      msg = Msg("Iter" -> cost_count, "RMSE(train)" -> train_err)
-      valid_err.foreach(msg.append("RMSE(valid)", _))
+      msg = Msg("Iter" -> cost_count, "RMSE(train)" -> train_rmse)
+      if (null != valid_data) {
+        msg.append("RMSE(valid)", valid_rmse)
+      }
       msg.append("time cost", now_time_cost)
       logInfo(msg.toString)
 
       if (min_err - current_err < min_step) {
+        println(s"min_err = $min_err, current_err = $current_err")
         logInfo(s"Gradient Boost model training done, average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count}})")
         return new GradientBoostModel(wk_learners.slice(0, best_iter),
+          feature_num,
           impurity,
           loss,
           max_depth,
@@ -193,7 +210,7 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
 
       // update data with pseudo-residuals
       train_new_data = train_pred.zip(train_data).map { case (predict, lp) =>
-        RegPoint(-1.0 * loss_calculator.gradient(predict, lp.label), lp.fs)
+        LabeledPoint(-1.0 * loss_calculator.gradient(predict, lp.label), lp.fs)
       }
 
       iter += 1
@@ -201,6 +218,7 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
 
     logInfo(s"GBoost model training done, average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count}})")
     new GradientBoostModel(wk_learners.slice(0, best_iter),
+      feature_num,
       impurity,
       loss,
       max_depth,
@@ -211,6 +229,18 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
       min_step,
       impurity_calculator,
       loss_calculator)
+  }
+
+  /**
+   * Evaluate the RMSE of estimated parameters.
+   *
+   * @param ls labels of the data.
+   * @param ps predictions of the data.
+   * @return the RMSE.
+   */
+  def evaluate(ls: Seq[Double], ps: Seq[Double]): Double = {
+    val lps = ls.zip(ps)
+    RMSE(lps)
   }
 }
 
@@ -231,19 +261,19 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
  * @param impurity_calculator Impurity calculator.
  * @param loss_calculator Loss calculator.
  */
-private[tree] class GradientBoostModel(wk_learners: Array[DecisionTreeNode],
-                                       impurity: Impurity,
-                                       loss: Loss,
-                                       max_depth: Int,
-                                       min_node_size: Int,
-                                       min_info_gain: Double,
-                                       num_iter: Int,
-                                       learn_rate: Double,
-                                       min_step: Double,
-                                       impurity_calculator: ImpurityCalculator,
-                                       loss_calculator: LossCalculator) extends Serializable {
-
-  private val serialVersionUID = 6529685098267757690L
+@SerialVersionUID(1L)
+class GradientBoostModel(val wk_learners: Array[DecisionTreeNode],
+                         val feature_num: Int,
+                         val impurity: Impurity,
+                         val loss: Loss,
+                         val max_depth: Int,
+                         val min_node_size: Int,
+                         val min_info_gain: Double,
+                         val num_iter: Int,
+                         val learn_rate: Double,
+                         val min_step: Double,
+                         val impurity_calculator: ImpurityCalculator,
+                         val loss_calculator: LossCalculator) extends Serializable {
 
   /**
    * Predict values for a single data point using the model trained.
@@ -253,17 +283,17 @@ private[tree] class GradientBoostModel(wk_learners: Array[DecisionTreeNode],
    */
   def predict(fs: SparseVector[Double]): Double = {
     val preds = wk_learners.map(DecisionTreeModel.predict(fs, _))
-    preds.map(_ * learn_rate).sum
+    preds.map(_ * learn_rate).sum + preds(0) * (1.0 - learn_rate)
   }
 
   /**
    * Predict values for the given data using the model trained.
    * Statistic RMSE while predicting.
    *
-   * @param input Array of [[bda.common.obj.RegPoint]] represent true label and features of data points
+   * @param input Array of [[bda.common.obj.LabeledPoint]] represent true label and features of data points
    * @return Array stored prediction
    */
-  def predict(input: Array[RegPoint]): (Array[Double], Double) = {
+  def predict(input: Array[LabeledPoint]): (Array[Double], Double) = {
     val err_counter = loss match {
       case SquaredError => new SquaredErrorCounter()
       case _ => throw new IllegalArgumentException(s"Did not recognize loss type: ${loss}")
