@@ -18,7 +18,7 @@
 
 The project implemented some machine learning algorithms on spark which is written in scala and it also included standalone implementations of these algorithms.
 
-You can find these ML algorithms util now:
+You can find these ML algorithms up to now:
 
 *	Decision Tree
 *	Gradient Boosted Decision Tree
