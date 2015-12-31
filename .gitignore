@@ -23,5 +23,6 @@ conf/*
 out
 out/*
 
+.*
 .gitignore
 .DS_Store
