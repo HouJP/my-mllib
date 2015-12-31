@@ -1,7 +1,7 @@
-package bda.local.runnable.decisionTree
+package bda.local.runnable.tree.decisionTree
 
 import bda.common.util.io.writeLines
-import bda.local.preprocess.Points
+import bda.local.reader.Points.readLibSVMFile
 import scopt.OptionParser
 import bda.local.model.tree.DecisionTreeModel
 
@@ -36,6 +36,7 @@ object Predict {
         .text("directory of the decision tree model")
         .action((x, c) => c.copy(model_pt = x))
       opt[String]("predict_pt")
+        .required()
         .text("directory of the prediction result")
         .action((x, c) => c.copy(predict_pt = x))
       note(
@@ -59,10 +60,9 @@ object Predict {
   def run(params: Params) {
 
     val model: DecisionTreeModel = DecisionTreeModel.load(params.model_pt)
-    val points =  Points.fromLibSVMFile(params.test_pt, model.feature_num)
-    val predictions = points.map { pn =>
-      val y = model.predict(pn.fs)
-      s"$y\t$pn"
+    val points =  readLibSVMFile(params.test_pt)
+    val predictions = model.predict(points).zip(points).map {
+      case (y, pn) => s"$y\t$pn"
     }
     writeLines(params.predict_pt, predictions)
   }

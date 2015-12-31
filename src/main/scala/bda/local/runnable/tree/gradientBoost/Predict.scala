@@ -1,6 +1,6 @@
-package bda.local.runnable.gradientBoost
+package bda.local.runnable.tree.gradientBoost
 
-import bda.local.preprocess.Points
+import bda.local.reader.Points.readLibSVMFile
 import bda.common.util.io.writeLines
 import scopt.OptionParser
 import bda.local.model.tree.GradientBoostModel
@@ -60,11 +60,12 @@ object Predict {
   def run(params: Params) {
 
     val model: GradientBoostModel = GradientBoostModel.load(params.model_pt)
-    val points =  Points.fromLibSVMFile(params.test_pt, model.feature_num)
-    val predictions = points.map { pn =>
-      val y = model.predict(pn.fs)
-      s"$y\t$pn"
+    val points = readLibSVMFile(params.test_pt)
+
+    val predictions = model.predict(points).zip(points).map {
+      case (y, pn) => s"$y\t$pn"
     }
+
     writeLines(params.predict_pt, predictions)
   }
 }

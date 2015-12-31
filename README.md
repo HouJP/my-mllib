@@ -1,6 +1,6 @@
 ****
 
-#<center>GBDT</center>
+#<center>my-mllib</center>
 ####<center>E-mail: houjp1992@gmail.com</center>
 
 ****
@@ -16,7 +16,13 @@
 
 ###<a name="intro">Project Introduction</a>
 
-The project implemented GBDT algorithm on spark which is written in scala and it also included a standalone implementation of GBDT.
+The project implemented some machine learning algorithms on spark which is written in scala and it also included standalone implementations of these algorithms.
+
+You can find these ML algorithms util now:
+
+*	Decision Tree
+*	Gradient Boosted Decision Tree
+*	Random Forest
 
 ****
 
@@ -95,6 +101,9 @@ TODO
 ****
 
 ###<a name="version">Version Updating</a>
+*	2015/12/31
+	* 	changed implementation of standalone decision tree algorithm (use bins) which made tree algorithms run faster.
+	*	implemented random forest algorithm of standalone/distributed mode.
 
 *	2015/12/01
 	*	changed implementation in distributed decision tree algorithm (use bins).

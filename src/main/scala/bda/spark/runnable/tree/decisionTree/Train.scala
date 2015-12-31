@@ -1,6 +1,6 @@
-package bda.spark.runnable.decisionTree
+package bda.spark.runnable.tree.decisionTree
 
-import bda.spark.preprocess.Points
+import bda.spark.reader.Points
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
 import bda.spark.model.tree.{DecisionTreeModel, DecisionTree}
@@ -93,11 +93,11 @@ object Train {
     val conf = new SparkConf().setAppName(s"Spark Decision Tree Training")//.setMaster("local")
     val sc = new SparkContext(conf)
 
-    val points = Points.fromLibSVMFile(sc, params.train_pt, params.feature_num)
+    val points = Points.readLibSVMFile(sc, params.train_pt)
 
     // prepare training and validate datasets
     val (train_points, valid_points) = if (!params.valid_pt.isEmpty) {
-      val points2 = Points.fromLibSVMFile(sc, params.valid_pt, params.feature_num)
+      val points2 = Points.readLibSVMFile(sc, params.valid_pt)
       (points, points2)
     } else {
       // train without validation

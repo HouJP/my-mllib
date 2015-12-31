@@ -1,7 +1,7 @@
-package bda.spark.runnable.gradientBoost
+package bda.spark.runnable.tree.gradientBoost
 
 
-import bda.spark.preprocess.Points
+import bda.spark.reader.Points
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
 import bda.spark.model.tree.GradientBoostModel
@@ -60,7 +60,7 @@ object Predict {
     val sc = new SparkContext(conf)
 
     val model: GradientBoostModel = GradientBoostModel.load(sc, params.model_pt)
-    val points = Points.fromLibSVMFile(sc, params.test_pt, model.feature_num).cache()
+    val points = Points.readLibSVMFile(sc, params.test_pt).cache()
 
     val predictions = model.predict(points).zip(points).map {
       case (y, pn) => s"$y\t$pn"

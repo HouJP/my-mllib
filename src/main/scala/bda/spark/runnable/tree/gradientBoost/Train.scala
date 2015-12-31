@@ -1,7 +1,6 @@
-package bda.spark.runnable.gradientBoost
+package bda.spark.runnable.tree.gradientBoost
 
-import bda.spark.preprocess.Points
-import bda.common.obj.LabeledPoint
+import bda.spark.reader.Points
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
 import bda.spark.model.tree.{GradientBoostModel, GradientBoost}
@@ -29,6 +28,8 @@ object Train {
                     min_samples: Int = 10000,
                     min_node_size: Int = 15,
                     min_info_gain: Double = 1e-6,
+                    row_rate: Double = 0.6,
+                    col_rate: Double = 0.6,
                     num_iter: Int = 20,
                     learn_rate: Double = 0.02,
                     min_step: Double = 1e-5)
@@ -63,6 +64,12 @@ object Train {
       opt[Double]("min_info_gain")
         .text(s"minimum information gain, default: ${default_params.min_info_gain}")
         .action((x, c) => c.copy(min_info_gain = x))
+      opt[Double]("row_rate")
+        .text(s"sampling rate of training data set, default: ${default_params.row_rate}")
+        .action((x, c) => c.copy(min_info_gain = x))
+      opt[Double]("col_rate")
+        .text(s"sampling rate of features, default: ${default_params.col_rate}")
+        .action((x, c) => c.copy(min_info_gain = x))
       opt[Int]("num_iter")
         .text(s"number of iterations, default: ${default_params.num_iter}")
         .action((x, c) => c.copy(num_iter = x))
@@ -96,7 +103,8 @@ object Train {
           |   --impurity "Variance" --loss "SquaredError" \
           |   --max_depth 10 --max_bins 32 \
           |   --min_samples 10000 --min_node_size 15 \
-          |   --min_info_gain 1e-6 --num_iter 50\
+          |   --min_info_gain 1e-6 --row_rate 0.6 \
+          |   --col_rate 0.6 --num_iter 50\
           |   --learn_rate 0.02 --min_step 1e-5 \
           |   --feature_num 10 \
           |   --train_pt ...
@@ -118,11 +126,11 @@ object Train {
     val sc = new SparkContext(conf)
     sc.setCheckpointDir(params.cp_dir)
 
-    val points = Points.fromLibSVMFile(sc, params.train_pt, params.feature_num)
+    val points = Points.readLibSVMFile(sc, params.train_pt)
 
     // prepare training and validate datasets
     val (train_points, valid_points) = if (!params.valid_pt.isEmpty) {
-      val points2 = Points.fromLibSVMFile(sc, params.valid_pt, params.feature_num)
+      val points2 = Points.readLibSVMFile(sc, params.valid_pt)
       (points, points2)
     } else {
       // train without validation
@@ -143,6 +151,8 @@ object Train {
       params.min_samples,
       params.min_node_size,
       params.min_info_gain,
+      params.row_rate,
+      params.col_rate,
       params.num_iter,
       params.learn_rate,
       params.min_step)

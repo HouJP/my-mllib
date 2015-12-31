@@ -11,27 +11,29 @@ import bda.spark.model.tree.Loss._
 import bda.spark.evaluate.Regression.RMSE
 
 /**
- * External interface of GBDT on spark.
- */
+  * External interface of GBDT on spark.
+  */
 object GradientBoost {
 
   /**
-   * An adapter of training a GBDT model.
-   *
-   * @param train_data Training data points.
-   * @param valid_data Validation data points.
-   * @param impurity Impurity type with String, default is "Variance".
-   * @param loss Loss function type with String, default is "SquaredError".
-   * @param max_depth Maximum depth of the decision tree, default is 6.
-   * @param max_bins Maximum number of bins, default is 32.
-   * @param min_samples Minimum number of samples used in finding splits and bins, default is 10000.
-   * @param min_node_size Minimum number of instances in the leaf, default is 15.
-   * @param min_info_gain Minimum information gain while spliting, default is 1e-6.
-   * @param num_iter Number of iterations.
-   * @param learn_rate Value of learning rate.
-   * @param min_step Minimum step of each iteration, or stop it.
-   * @return a [[bda.spark.model.tree.GradientBoostModel]] instance.
-   */
+    * An adapter of training a GBDT model.
+    *
+    * @param train_data Training data points.
+    * @param valid_data Validation data points.
+    * @param impurity Impurity type with String, default is "Variance".
+    * @param loss Loss function type with String, default is "SquaredError".
+    * @param max_depth Maximum depth of the decision tree, default is 10.
+    * @param max_bins Maximum number of bins, default is 32.
+    * @param min_samples Minimum number of samples used in finding splits and bins, default is 10000.
+    * @param min_node_size Minimum number of instances in the leaf, default is 15.
+    * @param min_info_gain Minimum information gain while spliting, default is 1e-6.
+    * @param row_rate sample ratio of train data set, default is 0.6.
+    * @param col_rate sample ratio of features, default is 0.6.
+    * @param num_iter Number of iterations.
+    * @param learn_rate Value of learning rate.
+    * @param min_step Minimum step of each iteration, or stop it.
+    * @return a [[bda.spark.model.tree.GradientBoostModel]] instance.
+    */
   def train(train_data: RDD[LabeledPoint],
             valid_data: RDD[LabeledPoint] = null,
             feature_num: Int = 0,
@@ -42,6 +44,8 @@ object GradientBoost {
             min_samples: Int = 10000,
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6,
+            row_rate: Double = 0.6,
+            col_rate: Double = 0.6,
             num_iter: Int = 50,
             learn_rate: Double = 0.02,
             min_step: Double = 1e-5): GradientBoostModel = {
@@ -54,6 +58,8 @@ object GradientBoost {
       min_samples,
       min_node_size,
       min_info_gain,
+      row_rate,
+      col_rate,
       num_iter,
       learn_rate,
       min_step).train(train_data, valid_data)
@@ -61,27 +67,31 @@ object GradientBoost {
 }
 
 /**
- * A class which implement GBDT algorithm.
- *
- * @param impurity Impurity type with [[bda.spark.model.tree.Impurity]].
- * @param loss Loss function type with [[bda.spark.model.tree.Loss]].
- * @param max_depth Maximum depth of the decision tree.
- * @param max_bins Maximum number of bins.
- * @param min_samples Minimum number of samples used in finding splits and bins.
- * @param min_node_size Minimum number of instances in the leaf.
- * @param min_info_gain Minimum information gain while spliting.
- * @param num_iter Number of iterations.
- * @param learn_rate Value of learning rate.
- * @param min_step Minimum step of each iteration, or stop it.
- */
+  * A class which implement GBDT algorithm.
+  *
+  * @param impurity Impurity type with [[bda.spark.model.tree.Impurity]].
+  * @param loss Loss function type with [[bda.spark.model.tree.Loss]].
+  * @param max_depth Maximum depth of the decision tree.
+  * @param max_bins Maximum number of bins.
+  * @param bin_samples Minimum number of samples used in finding splits and bins.
+  * @param min_node_size Minimum number of instances in the leaf.
+  * @param min_info_gain Minimum information gain while spliting.
+  * @param row_rate sample ratio of train data set.
+  * @param col_rate sample ratio of features.
+  * @param num_iter Number of iterations.
+  * @param learn_rate Value of learning rate.
+  * @param min_step Minimum step of each iteration, or stop it.
+  */
 private[tree] class GradientBoostTrainer(feature_num: Int,
                                          impurity: Impurity,
                                          loss: Loss,
                                          max_depth: Int,
                                          max_bins: Int,
-                                         min_samples: Int,
+                                         bin_samples: Int,
                                          min_node_size: Int,
                                          min_info_gain: Double,
+                                         row_rate: Double,
+                                         col_rate: Double,
                                          num_iter: Int,
                                          learn_rate: Double,
                                          min_step: Double) extends Logging {
@@ -99,12 +109,12 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
   }
 
   /**
-   * Method to train a GBDT model over training data.
-   *
-   * @param train_data Training data which represented as a RDD of [[bda.common.obj.LabeledPoint]].
-   * @param valid_data Validation data which represented as a RDD of [[bda.common.obj.LabeledPoint]] and can be none.
-   * @return a [[bda.spark.model.tree.GradientBoostModel]] instance.
-   */
+    * Method to train a GBDT model over training data.
+    *
+    * @param train_data Training data which represented as a RDD of [[bda.common.obj.LabeledPoint]].
+    * @param valid_data Validation data which represented as a RDD of [[bda.common.obj.LabeledPoint]] and can be none.
+    * @return a [[bda.spark.model.tree.GradientBoostModel]] instance.
+    */
   def train(train_data: RDD[LabeledPoint],
             valid_data: RDD[LabeledPoint]): GradientBoostModel = {
     val loss_calculator = this.loss_calculator
@@ -132,9 +142,11 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
       loss,
       max_depth,
       max_bins,
-      min_samples,
+      bin_samples,
       min_node_size,
-      min_info_gain).train(data, null)
+      min_info_gain,
+      row_rate,
+      col_rate).train(data, null)
     wk_learners(0) = wl0.root
 
     // compute prediction and RMSE for train data
@@ -172,8 +184,10 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
       val begin_t = System.nanoTime()
 
       // get data to train DTree
-      data = train_pred.zip(train_data).map { case (pred, lp) =>
-        LabeledPoint(-1.0 * loss_calculator.gradient(pred, lp.label), lp.fs)
+      data = train_pred.zip(train_data).map {
+        case (pred, lp) =>
+          val new_label = -1.0 * loss_calculator.gradient(pred, lp.label)
+          LabeledPoint(lp.id, new_label, lp.fs)
       }
 
       // building weak leaner #iter
@@ -182,9 +196,11 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
         loss,
         max_depth,
         max_bins,
-        min_samples,
+        bin_samples,
         min_node_size,
-        min_info_gain).train(data, null)
+        min_info_gain,
+        row_rate,
+        col_rate).train(data, null)
       wk_learners(iter) = wl.root
 
       // compute prediction and error for train data
@@ -238,18 +254,18 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
 
       if (min_rmse - train_rmse < min_step) {
 
-        logInfo(s"Gradient Boost model training done, " +
-          s"average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count}})")
-
+        logInfo(s"Gradient Boost model training done, average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count})")
         return new GradientBoostModel(wk_learners.slice(0, best_iter),
           feature_num,
           impurity,
           loss,
           max_depth,
           max_bins,
-          min_samples,
+          bin_samples,
           min_node_size,
           min_info_gain,
+          row_rate,
+          col_rate,
           num_iter,
           learn_rate,
           min_step,
@@ -278,9 +294,11 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
       loss,
       max_depth,
       max_bins,
-      min_samples,
+      bin_samples,
       min_node_size,
       min_info_gain,
+      row_rate,
+      col_rate,
       num_iter,
       learn_rate,
       min_step,
@@ -330,24 +348,26 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
 }
 
 /**
- * Class of GBDT model which stored GBDT model structure and parameters.
- *
- * @param wk_learners weak learners
- *                    which formed gradient boosting model
- *                    and represented as [[bda.spark.model.tree.DecisionTreeNode]].
- * @param impurity Impurity type with [[bda.spark.model.tree.Impurity]].
- * @param loss Loss function type with [[bda.spark.model.tree.Loss]].
- * @param max_depth Maximum depth of the decision tree.
- * @param max_bins Maximum number of bins.
- * @param min_samples Minimum number of samples used in finding splits and bins.
- * @param min_node_size Minimum number of instances in the leaf.
- * @param min_info_gain Minimum information gain while spliting.
- * @param num_iter Number of iterations.
- * @param learn_rate Value of learning rate.
- * @param min_step Minimum step of each iteration, or stop it.
- * @param impurity_calculator Impurity calculator.
- * @param loss_calculator Loss calculator.
- */
+  * Class of GBDT model which stored GBDT model structure and parameters.
+  *
+  * @param wk_learners weak learners
+  *                    which formed gradient boosting model
+  *                    and represented as [[bda.spark.model.tree.DecisionTreeNode]].
+  * @param impurity Impurity type with [[bda.spark.model.tree.Impurity]].
+  * @param loss Loss function type with [[bda.spark.model.tree.Loss]].
+  * @param max_depth Maximum depth of the decision tree.
+  * @param max_bins Maximum number of bins.
+  * @param min_samples Minimum number of samples used in finding splits and bins.
+  * @param min_node_size Minimum number of instances in the leaf.
+  * @param min_info_gain Minimum information gain while spliting.
+  * @param row_rate sampling rate of training data set.
+  * @param col_rate sampling rate of features.
+  * @param num_iter Number of iterations.
+  * @param learn_rate Value of learning rate.
+  * @param min_step Minimum step of each iteration, or stop it.
+  * @param impurity_calculator Impurity calculator.
+  * @param loss_calculator Loss calculator.
+  */
 class GradientBoostModel(val wk_learners: Array[DecisionTreeNode],
                          val feature_num: Int,
                          val impurity: Impurity,
@@ -357,6 +377,8 @@ class GradientBoostModel(val wk_learners: Array[DecisionTreeNode],
                          val min_samples: Int,
                          val min_node_size: Int,
                          val min_info_gain: Double,
+                         val row_rate: Double,
+                         val col_rate: Double,
                          val num_iter: Int,
                          val learn_rate: Double,
                          val min_step: Double,
@@ -364,12 +386,12 @@ class GradientBoostModel(val wk_learners: Array[DecisionTreeNode],
                          val loss_calculator: LossCalculator) extends Serializable {
 
   /**
-   * Predict values for the given data set using the model trained.
-   * Statistic RMSE while predicting.
-   *
-   * @param input A RDD of [[bda.common.obj.LabeledPoint]] stored true label and features.
-   * @return RDD stored prediction.
-   */
+    * Predict values for the given data set using the model trained.
+    * Statistic RMSE while predicting.
+    *
+    * @param input A RDD of [[bda.common.obj.LabeledPoint]] stored true label and features.
+    * @return RDD stored prediction.
+    */
   def predict(input: RDD[LabeledPoint]): RDD[Double] = {
     val wk_learners = this.wk_learners
     val learn_rate = this.learn_rate
@@ -383,11 +405,11 @@ class GradientBoostModel(val wk_learners: Array[DecisionTreeNode],
   }
 
   /**
-   * Store GBDT model on the disk.
-   *
-   * @param sc Spark Context.
-   * @param pt Path of the location on the disk.
-   */
+    * Store GBDT model on the disk.
+    *
+    * @param sc Spark Context.
+    * @param pt Path of the location on the disk.
+    */
   def save(sc: SparkContext, pt: String): Unit = {
 
     val model_rdd = sc.makeRDD(Seq(this))
@@ -398,27 +420,27 @@ class GradientBoostModel(val wk_learners: Array[DecisionTreeNode],
 object GradientBoostModel {
 
   /**
-   * Predict values for a single data point using the model trained.
-   *
-   * @param fs feature vector of a single data point.
-   * @param wk_learners weak learners formed by roots of decision trees.
-   * @param learn_rate Value of learning rate.
-   * @return Value of prediction
-   */
+    * Predict values for a single data point using the model trained.
+    *
+    * @param fs feature vector of a single data point.
+    * @param wk_learners weak learners formed by roots of decision trees.
+    * @param learn_rate Value of learning rate.
+    * @return Value of prediction
+    */
   private[tree] def predict(fs: SparseVector[Double],
-              wk_learners: Array[DecisionTreeNode],
-              learn_rate: Double): Double = {
+                            wk_learners: Array[DecisionTreeNode],
+                            learn_rate: Double): Double = {
     val preds = wk_learners.map(DecisionTreeModel.predict(fs, _))
     preds.map(_ * learn_rate).sum + DecisionTreeModel.predict(fs, wk_learners(0)) * (1 - learn_rate)
   }
 
   /**
-   * Load GBDT model from the disk.
-   *
-   * @param sc Spark context.
-   * @param pt The directory of the GBDT model.
-   * @return A [[bda.spark.model.tree.GradientBoostModel]] instance.
-   */
+    * Load GBDT model from the disk.
+    *
+    * @param sc Spark context.
+    * @param pt The directory of the GBDT model.
+    * @return A [[bda.spark.model.tree.GradientBoostModel]] instance.
+    */
   def load(sc: SparkContext, pt: String): GradientBoostModel = {
 
     sc.objectFile[GradientBoostModel](pt).first()

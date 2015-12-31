@@ -1,11 +1,9 @@
-package bda.spark.runnable.decisionTree
+package bda.spark.runnable.tree.decisionTree
 
-import bda.spark.preprocess.Points
+import bda.spark.reader.Points
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
-import bda.spark.model.tree.DecisionTreeModel
-
-import scala.collection.immutable.Queue
+import bda.spark.model.tree.GradientBoostModel
 
 /**
  * Decision Tree predictor.
@@ -63,8 +61,8 @@ object Predict {
     val conf = new SparkConf().setAppName(s"Spark Decision Tree Prediction")//.setMaster("local")
     val sc = new SparkContext(conf)
 
-    val model: DecisionTreeModel = DecisionTreeModel.load(sc, params.model_pt)
-    val points = Points.fromLibSVMFile(sc, params.test_pt, model.feature_num).cache()
+    val model: GradientBoostModel = GradientBoostModel.load(sc, params.model_pt)
+    val points = Points.readLibSVMFile(sc, params.test_pt).cache()
 
     val predictions = model.predict(points).zip(points).map {
       case (y, pn) => s"$y\t$pn"
