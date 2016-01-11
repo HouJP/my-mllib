@@ -24,7 +24,7 @@ object RandomForest {
    * @param loss Loss function type with String, default is "SquaredError".
    * @param max_depth Maximum depth of the decision tree, default is 10.
    * @param max_bins Maximum number of bins, default is 32.
-   * @param min_samples Minimum number of samples used in finding splits and bins, default is 10000.
+   * @param bin_samples Minimum number of samples used in finding splits and bins, default is 10000.
    * @param min_node_size Minimum number of instances in the leaf, default is 15.
    * @param min_info_gain Minimum information gain while splitting, default is 1e-6.
    * @param row_rate sample ratio of train data set, default is 0.6.
@@ -34,24 +34,22 @@ object RandomForest {
    */
   def train(train_data: RDD[LabeledPoint],
             valid_data: RDD[LabeledPoint] = null,
-            feature_num: Int = 0,
             impurity: String = "Variance",
             loss: String = "SquaredError",
             max_depth: Int = 10,
             max_bins: Int = 32,
-            min_samples: Int = 10000,
+            bin_samples: Int = 10000,
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6,
             row_rate: Double = 0.6,
             col_rate: Double = 0.6,
             num_trees: Int = 20): RandomForestModel = {
 
-    new RandomForestTrainer(feature_num,
-      Impurity.fromString(impurity),
+    new RandomForestTrainer(Impurity.fromString(impurity),
       Loss.fromString(loss),
       max_depth,
       max_bins,
-      min_samples,
+      bin_samples,
       min_node_size,
       min_info_gain,
       row_rate,
@@ -67,19 +65,18 @@ object RandomForest {
  * @param loss Loss function type with [[bda.spark.model.tree.Loss]].
  * @param max_depth Maximum depth of the decision tree.
  * @param max_bins Maximum number of bins.
- * @param min_samples Minimum number of samples used in finding splits and bins.
+ * @param bin_samples Minimum number of samples used in finding splits and bins.
  * @param min_node_size Minimum number of instances in the leaf.
  * @param min_info_gain Minimum information gain while spliting.
  * @param row_rate sample ratio of train data set.
  * @param col_rate sample ratio of features.
  * @param num_trees number of decision trees.
  */
-private[tree] class RandomForestTrainer(feature_num: Int,
-                                        impurity: Impurity,
+private[tree] class RandomForestTrainer(impurity: Impurity,
                                         loss: Loss,
                                         max_depth: Int,
                                         max_bins: Int,
-                                        min_samples: Int,
+                                        bin_samples: Int,
                                         min_node_size: Int,
                                         min_info_gain: Double,
                                         row_rate: Double,
@@ -107,6 +104,27 @@ private[tree] class RandomForestTrainer(feature_num: Int,
    * @return a [[bda.spark.model.tree.RandomForestModel]] instance which can be used to predict.
    */
   def train(train_data: RDD[LabeledPoint], valid_data: RDD[LabeledPoint]): RandomForestModel = {
+    val n_train = train_data.count().toInt
+    val n_valid = valid_data match {
+      case null => 0
+      case _ => valid_data.count()
+    }
+
+    // logging the input parameters
+    val msg_para = Msg("n(train)" -> n_train,
+      "n(valid)" -> n_valid,
+      "impurity" -> impurity,
+      "loss" -> loss,
+      "max_depth" -> max_depth,
+      "max_bins" -> max_bins,
+      "bin_samples" -> bin_samples,
+      "min_node_size" -> min_node_size,
+      "min_info_gain" -> min_info_gain,
+      "row_rate" -> row_rate,
+      "col_rate" -> col_rate,
+      "num_trees" -> num_trees)
+    logInfo(msg_para.toString)
+
     val timer = new Timer()
     var pre_time = 0L
     var now_time = 0L
@@ -116,12 +134,11 @@ private[tree] class RandomForestTrainer(feature_num: Int,
     val wk_learners = new Array[DecisionTreeNode](num_trees)
     var ind = 0
     while (ind < num_trees) {
-      val wl = new DecisionTreeTrainer(feature_num,
-        impurity,
+      val wl = new DecisionTreeTrainer(impurity,
         loss,
         max_depth,
         max_bins,
-        min_samples,
+        bin_samples,
         min_node_size,
         min_info_gain,
         row_rate,
@@ -150,12 +167,11 @@ private[tree] class RandomForestTrainer(feature_num: Int,
     }
 
     new RandomForestModel(wk_learners,
-      feature_num,
       impurity,
       loss,
       max_depth,
       max_bins,
-      min_samples,
+      bin_samples,
       min_node_size,
       min_info_gain,
       row_rate,
@@ -175,6 +191,8 @@ private[tree] class RandomForestTrainer(feature_num: Int,
  * @param impurity Impurity type with [[bda.spark.model.tree.Impurity]].
  * @param loss Loss function type with [[bda.spark.model.tree.Loss]].
  * @param max_depth Maximum depth of the decision tree.
+ * @param max_bins Maximum number of bins.
+ * @param bin_samples Minimum number of samples used in finding splits and bins.
  * @param min_node_size Minimum number of instances in the leaf.
  * @param min_info_gain Minimum information gain while splitting.
  * @param row_rate sample ratio of train data set, default is 0.6.
@@ -184,12 +202,11 @@ private[tree] class RandomForestTrainer(feature_num: Int,
  * @param loss_calculator Loss calculator.
  */
 class RandomForestModel(val wk_learners: Array[DecisionTreeNode],
-                        val feature_num: Int,
                         val impurity: Impurity,
                         val loss: Loss,
                         val max_depth: Int,
                         val max_bins: Int,
-                        val min_samples: Int,
+                        val bin_samples: Int,
                         val min_node_size: Int,
                         val min_info_gain: Double,
                         val row_rate: Double,

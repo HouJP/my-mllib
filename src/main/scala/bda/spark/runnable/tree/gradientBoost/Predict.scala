@@ -1,7 +1,9 @@
 package bda.spark.runnable.tree.gradientBoost
 
 
+import bda.common.obj.LabeledPoint
 import bda.spark.reader.Points
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
 import bda.spark.model.tree.GradientBoostModel
@@ -24,6 +26,10 @@ object Predict {
                     predict_pt: String = "")
 
   def main(args: Array[String]) {
+    // do not show log info
+    Logger.getLogger("org").setLevel(Level.WARN)
+    Logger.getLogger("aka").setLevel(Level.WARN)
+
     val default_params = Params()
 
     val parser = new OptionParser[Params]("RunSparkGradientBoost") {
@@ -56,11 +62,13 @@ object Predict {
   }
 
   def run(params: Params) {
-    val conf = new SparkConf().setAppName(s"Spark Gradient Boost Prediction")//.setMaster("local")
+    val conf = new SparkConf()
+      .setAppName(s"Spark Gradient Boost Prediction")
+      .set("spark.hadoop.validateOutputSpecs", "false")
     val sc = new SparkContext(conf)
 
     val model: GradientBoostModel = GradientBoostModel.load(sc, params.model_pt)
-    val points = Points.readLibSVMFile(sc, params.test_pt).cache()
+    val points = sc.textFile(params.test_pt).map(LabeledPoint.parse)
 
     val predictions = model.predict(points).zip(points).map {
       case (y, pn) => s"$y\t$pn"

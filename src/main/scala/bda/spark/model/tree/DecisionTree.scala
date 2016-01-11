@@ -1,5 +1,7 @@
 package bda.spark.model.tree
 
+//import bda.common.util.Poisson
+import org.apache.commons.math3.distribution.PoissonDistribution
 import bda.common.obj.LabeledPoint
 import bda.common.linalg.immutable.SparseVector
 import bda.common.util.{Sampler, Msg, Timer}
@@ -7,7 +9,6 @@ import bda.common.Logging
 import bda.spark.model.tree.Impurity._
 import bda.spark.evaluate.Regression.RMSE
 import bda.spark.model.tree.Loss._
-import org.apache.commons.math3.distribution.PoissonDistribution
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
@@ -37,7 +38,6 @@ object DecisionTree {
    */
   def train(train_data: RDD[LabeledPoint],
             valid_data: RDD[LabeledPoint] = null,
-            feature_num: Int = 0,
             impurity: String = "Variance",
             loss: String = "SquaredError",
             max_depth: Int = 10,
@@ -45,11 +45,10 @@ object DecisionTree {
             bin_samples: Int = 10000,
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6,
-            row_rate: Double = 0.6,
-            col_rate: Double = 0.6): DecisionTreeModel = {
+            row_rate: Double = 1.0,
+            col_rate: Double = 1.0): DecisionTreeModel = {
 
-    new DecisionTreeTrainer(feature_num,
-      Impurity.fromString(impurity),
+    new DecisionTreeTrainer(Impurity.fromString(impurity),
       Loss.fromString(loss),
       max_depth,
       max_bins,
@@ -74,8 +73,7 @@ object DecisionTree {
  * @param row_rate sample ratio of train data set.
  * @param col_rate sample ratio of features.
  */
-private[tree] class DecisionTreeTrainer(feature_num: Int,
-                                        impurity: Impurity,
+private[tree] class DecisionTreeTrainer(impurity: Impurity,
                                         loss: Loss,
                                         max_depth: Int,
                                         max_bins: Int,
@@ -115,18 +113,37 @@ private[tree] class DecisionTreeTrainer(feature_num: Int,
       valid_data.persist()
     }
 
-    val num_examples = train_data.count().toInt
-    val num_fs = feature_num
+    val n_train = train_data.count().toInt
+    val n_valid = valid_data match {
+      case null => 0
+      case _ => valid_data.count().toInt
+    }
+    val num_fs = train_data.map(_.fs.maxActiveIndex).max + 1
     val num_sub_fs = (num_fs * col_rate).ceil.toInt
-    val new_bins = math.min(max_bins, num_examples)
+    val new_bins = math.min(max_bins, n_train)
     val num_bins_all = Array.fill[Int](num_fs)(new_bins)
+
+    // logging the input parameters
+    val msg_para = Msg("n(train)" -> n_train,
+      "n(valid)" -> n_valid,
+      "n(feature)" -> num_fs,
+      "impurity" -> impurity,
+      "loss" -> loss,
+      "max_depth" -> max_depth,
+      "max_bins" -> max_bins,
+      "bin_samples" -> bin_samples,
+      "min_node_size" -> min_node_size,
+      "min_info_gain" -> min_info_gain,
+      "row_rate" -> row_rate,
+      "col_rate" -> col_rate)
+    logInfo(msg_para.toString)
 
     // find splits and bins for each feature
     val (splits, bins) = findSplitsBins(train_data,
       new_bins,
       num_bins_all,
       num_fs,
-      num_examples,
+      n_train,
       bin_samples)
 
     // convert LabeledPoint to TreePoint which used bin-index instead of feature-value
@@ -224,7 +241,7 @@ private[tree] class DecisionTreeTrainer(feature_num: Int,
     logInfo(msg.toString)
 
     new DecisionTreeModel(root,
-      feature_num: Int,
+      num_fs: Int,
       impurity,
       loss,
       max_depth,
@@ -797,8 +814,7 @@ private[tree] class DecisionTreeNode (val id: Int,
    * @param rate sampling ratio of features.
    */
   def sampleFeatures(tol: Int, rate: Double): Unit = {
-    sub_fs = Sampler.withoutBack(tol, rate)
-    // println(s"HouJP >> <sampleFeatures> tol = $tol, rate = $rate, sub_num = ${sub_fs.mkString(",")}")
+    sub_fs = Sampler.subSample(tol, rate)
   }
 
   /**

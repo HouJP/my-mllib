@@ -1,7 +1,9 @@
 package bda.spark.runnable.tree.randomForest
 
 
+import bda.common.obj.LabeledPoint
 import bda.spark.reader.Points
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
 import bda.spark.model.tree.RandomForestModel
@@ -24,6 +26,10 @@ object Predict {
                     predict_pt: String = "")
 
   def main(args: Array[String]) {
+    // do not show log info
+    Logger.getLogger("org").setLevel(Level.WARN)
+    Logger.getLogger("aka").setLevel(Level.WARN)
+
     val default_params = Params()
 
     val parser = new OptionParser[Params]("RunSparkRandomForest") {
@@ -56,11 +62,13 @@ object Predict {
   }
 
   def run(params: Params) {
-    val conf = new SparkConf().setAppName(s"Spark Random Forest Prediction")//.setMaster("local[4]")
+    val conf = new SparkConf()
+      .setAppName(s"Spark Random Forest Prediction")
+      .set("spark.hadoop.validateOutputSpecs", "false")
     val sc = new SparkContext(conf)
 
     val model: RandomForestModel = RandomForestModel.load(sc, params.model_pt)
-    val points = Points.readLibSVMFile(sc, params.test_pt).cache()
+    val points = sc.textFile(params.test_pt).map(LabeledPoint.parse)
 
     val predictions = model.predict(points).zip(points).map {
       case (y, pn) => s"$y\t$pn"

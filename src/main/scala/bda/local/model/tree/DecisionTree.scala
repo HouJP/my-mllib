@@ -1,5 +1,6 @@
 package bda.local.model.tree
 
+import bda.common.util.PoissonDistribution
 import bda.common.obj.LabeledPoint
 import bda.common.linalg.immutable.SparseVector
 import bda.common.util.{io, Msg, Timer}
@@ -9,7 +10,6 @@ import bda.local.model.tree.Loss._
 import bda.local.evaluate.Regression.RMSE
 import scala.collection.mutable
 import bda.common.util.Sampler
-import org.apache.commons.math3.distribution.PoissonDistribution
 
 /**
   * External interface of decision tree in standalone.
@@ -28,13 +28,12 @@ object DecisionTree {
     * @param bin_samples Minimum number of samples used in finding splits and bins, default is 10000.
     * @param min_node_size Minimum number of instances in the leaf, default is 15.
     * @param min_info_gain Minimum information gain while splitting, default is 1e-6.
-    * @param row_rate sample ratio of train data set.
-    * @param col_rate sample ratio of features.
+    * @param row_rate sample ratio of train data set, default is 1.0.
+    * @param col_rate sample ratio of features, default is 1.0.
     * @return a [[bda.local.model.tree.DecisionTreeModel]] instance.
     */
   def train(train_data: Seq[LabeledPoint],
             valid_data: Seq[LabeledPoint] = null,
-            feature_num: Int,
             impurity: String = "Variance",
             loss: String = "SquaredError",
             max_depth: Int = 10,
@@ -42,11 +41,10 @@ object DecisionTree {
             bin_samples: Int = 10000,
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6,
-            row_rate: Double = 0.6,
-            col_rate: Double = 0.6): DecisionTreeModel = {
+            row_rate: Double = 1.0,
+            col_rate: Double = 1.0): DecisionTreeModel = {
 
-    new DecisionTreeTrainer(feature_num,
-      Impurity.fromString(impurity),
+    new DecisionTreeTrainer(Impurity.fromString(impurity),
       Loss.fromString(loss),
       max_depth,
       max_bins,
@@ -71,8 +69,7 @@ object DecisionTree {
   * @param row_rate sample ratio of train data set.
   * @param col_rate sample ratio of features.
   */
-private[tree] class DecisionTreeTrainer(feature_num: Int,
-                                        impurity: Impurity,
+private[tree] class DecisionTreeTrainer(impurity: Impurity,
                                         loss: Loss,
                                         max_depth: Int,
                                         max_bins: Int,
@@ -106,35 +103,46 @@ private[tree] class DecisionTreeTrainer(feature_num: Int,
 
     val timer = new Timer()
 
-    val num_examples = train_data.length
-    val num_fs = feature_num
+    val n_train = train_data.length
+    val n_valid = valid_data match {
+      case null => 0
+      case _ => valid_data.length
+    }
+    val num_fs = train_data.map(_.fs.maxActiveIndex).max + 1
     val num_sub_fs = (num_fs * col_rate).ceil.toInt
-    val new_bins = math.min(max_bins, num_examples)
+    val new_bins = math.min(max_bins, n_train)
     val num_bins_all = Array.fill[Int](num_fs)(new_bins)
+
+    // logging the input parameters
+    val msg_para = Msg("n(train)" -> n_train,
+      "n(valid)" -> n_valid,
+      "n(feature)" -> num_fs,
+      "impurity" -> impurity,
+      "loss" -> loss,
+      "max_depth" -> max_depth,
+      "max_bins" -> max_bins,
+      "bin_samples" -> bin_samples,
+      "min_node_size" -> min_node_size,
+      "min_info_gain" -> min_info_gain,
+      "row_rate" -> row_rate,
+      "col_rate" -> col_rate)
+    logInfo(msg_para.toString)
 
     // find splits and bins for each feature
     val (splits, bins) = findSplitsBins(train_data,
       new_bins,
       num_bins_all,
       num_fs,
-      num_examples,
+      n_train,
       bin_samples)
 
     // convert LabeledPoint to TreePoint which used bin-index instead of feature-value
     val dt_points: Seq[DecisionTreePoint] =
       DecisionTreePoint.convertToDecisionTreeRDD(train_data, bins, num_bins_all, num_fs, row_rate)
-    //Log.log("INFO", "Training data set convert to DTreePoint done.")
-
-    // check sampling ratio of training data set
-    // val ck_row_rate = dt_points.map(_.weight).sum.toDouble / num_examples
-    // println(s"HouJP >> sampling ratio of training data set = $ck_row_rate")
 
     // create root for decision tree
     val root = DecisionTreeNode.empty(id = 1, 0)
     // calculate root's impurity and root's predict
-    //    val root_count = num_examples
-    //    val root_sum = dt_points.map(_.label).sum
-    //    val root_squared_sum = dt_points.map(p => p.label * p.label).sum
     val root_count = dt_points.map(_.weight).sum
     val root_sum = dt_points.map(p => p.label * p.weight).sum
     val root_squared_sum = dt_points.map(p => p.label * p.label * p.weight).sum
@@ -171,9 +179,6 @@ private[tree] class DecisionTreeTrainer(feature_num: Int,
 
         agg_leaves.view.zipWithIndex.map(_.swap)
       }
-
-      //  agg_leaves.view.zipWithIndex.map(_.swap).iterator
-      //}.reduceByKey((a, b) => a.merge(b))
 
       val best_splits = findBestSplit(agg_leaves,
         leaves,
@@ -218,7 +223,7 @@ private[tree] class DecisionTreeTrainer(feature_num: Int,
     logInfo(msg.toString)
 
     new DecisionTreeModel(root,
-      feature_num,
+      num_fs,
       impurity,
       loss,
       max_depth,
@@ -241,7 +246,6 @@ private[tree] class DecisionTreeTrainer(feature_num: Int,
   def findSplittingNodes(node_que: mutable.Queue[DecisionTreeNode]): Array[DecisionTreeNode] = {
     val leaves_builder = mutable.ArrayBuilder.make[DecisionTreeNode]
     while (node_que.nonEmpty) {
-      // println(s"HouJP >> sub fs of ${node_que.head.id} is: ${node_que.head.sub_fs.getOrElse(Seq[Int]()).mkString(",")}")
       leaves_builder += node_que.dequeue()
     }
     leaves_builder.result()
@@ -273,7 +277,7 @@ private[tree] class DecisionTreeTrainer(feature_num: Int,
     } else {
       1.0
     }
-    val sampled_input = Sampler.withoutBack[LabeledPoint](input, fraction)//input.sample(withReplacement = false, fraction, new Random().nextLong()).collect()
+    val sampled_input = Sampler.subSample[LabeledPoint](input.toArray, fraction)
     // println("HouJP >> sampled input:")
     // sampled_input.foreach(println)
 
@@ -828,8 +832,7 @@ private[tree] class DecisionTreeNode (val id: Int,
    * @param rate sampling ratio of features.
    */
   def sampleFeatures(tol: Int, rate: Double): Unit = {
-    sub_fs = Sampler.withoutBack(tol, rate)
-    // println(s"HouJP >> <sampleFeatures> tol = $tol, rate = $rate, sub_num = ${sub_fs.getOrElse(Seq[Int]()).length}")
+    sub_fs = Sampler.subSample(tol, rate)
   }
 
   /**

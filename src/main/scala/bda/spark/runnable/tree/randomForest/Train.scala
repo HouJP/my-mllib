@@ -1,5 +1,6 @@
 package bda.spark.runnable.tree.randomForest
 
+import bda.common.obj.LabeledPoint
 import bda.spark.reader.Points
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
@@ -19,12 +20,11 @@ object Train {
   case class Params(train_pt: String = "",
                     valid_pt: String = "",
                     model_pt: String = "",
-                    feature_num: Int = 0,
                     impurity: String = "Variance",
                     loss: String = "SquaredError",
                     max_depth: Int = 10,
                     max_bins: Int = 32,
-                    min_samples: Int = 10000,
+                    bin_samples: Int = 10000,
                     min_node_size: Int = 15,
                     min_info_gain: Double = 1e-6,
                     row_rate: Double = 0.6,
@@ -52,9 +52,9 @@ object Train {
       opt[Int]("max_bins")
         .text(s"maximum bins's number of tree, default: ${default_params.max_bins}")
         .action((x, c) => c.copy(max_bins = x))
-      opt[Int]("min_samples")
-        .text(s"minimum number of samples of tree, default: ${default_params.min_samples}")
-        .action((x, c) => c.copy(min_samples = x))
+      opt[Int]("bin_samples")
+        .text(s"minimum number of samples of tree, default: ${default_params.bin_samples}")
+        .action((x, c) => c.copy(bin_samples = x))
       opt[Int]("min_node_size")
         .text(s"minimum node size, default: ${default_params.min_node_size}")
         .action((x, c) => c.copy(min_node_size = x))
@@ -79,9 +79,6 @@ object Train {
       opt[String]("model_pt")
         .text("directory of the decision tree model")
         .action((x, c) => c.copy(model_pt = x))
-      opt[Int]("feature_num").required()
-        .text(s"number of features, default: ${default_params.feature_num}")
-        .action((x, c) => c.copy(feature_num = x))
       note(
         """
           |For example, the following command runs this app on your data set:
@@ -93,7 +90,6 @@ object Train {
           |   --min_samples 10000 --min_node_size 15 \
           |   --min_info_gain 1e-6 --row_rate 0.6 \
           |   --col_rate 0.6 --num_trees 50\
-          |   --feature_num 8 \
           |   --train_pt ... \
           |   --valid_pt ... \
           |   --model_pt ...
@@ -108,14 +104,16 @@ object Train {
   }
 
   def run(params: Params) {
-    val conf = new SparkConf().setAppName(s"Spark Random Forest Training")//.setMaster("local[4]")
+    val conf = new SparkConf()
+      .setAppName(s"Spark Random Forest Training")
+      .set("spark.hadoop.validateOutputSpecs", "false")
     val sc = new SparkContext(conf)
 
-    val points = Points.readLibSVMFile(sc, params.train_pt)
+    val points = sc.textFile(params.train_pt).map(LabeledPoint.parse)
 
     // prepare training and validate datasets
     val (train_points, valid_points) = if (!params.valid_pt.isEmpty) {
-      val points2 = Points.readLibSVMFile(sc, params.valid_pt)
+      val points2 = sc.textFile(params.valid_pt).map(LabeledPoint.parse)
       (points, points2)
     } else {
       // train without validation
@@ -128,12 +126,11 @@ object Train {
     val model: RandomForestModel = RandomForest.train(
       train_points,
       valid_points,
-      params.feature_num,
       params.impurity,
       params.loss,
       params.max_depth,
       params.max_bins,
-      params.min_samples,
+      params.bin_samples,
       params.min_node_size,
       params.min_info_gain,
       params.row_rate,

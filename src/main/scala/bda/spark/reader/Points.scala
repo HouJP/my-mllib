@@ -12,7 +12,7 @@ import org.apache.spark.rdd.RDD
 object Points extends Logging {
 
   /**
-   * Parse LabeledPoint from libsvm format RDD Strings.
+   * Parse LabeledPoint from libSVM format RDD Strings.
    * Each line is a labeled point (libsvm datasets do not have unlabeled data):
    * label fid:v fid:v ...
    *
@@ -54,7 +54,7 @@ object Points extends Logging {
         // for binary class
         if (label < 0) 0.0 else label
       }
-      val fs = SparseVector(n_feature, fvs)
+      val fs = SparseVector(fvs)
       LabeledPoint(new_label, fs)
     }
   }

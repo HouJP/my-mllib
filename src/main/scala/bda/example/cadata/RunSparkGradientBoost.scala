@@ -1,5 +1,6 @@
 package bda.example.cadata
 
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkContext, SparkConf}
 import bda.spark.model.tree.{GradientBoostModel, GradientBoost}
 import bda.spark.reader.Points
@@ -14,8 +15,10 @@ import bda.example.{input_dir, tmp_dir}
 object RunSparkGradientBoost {
 
   def main(args: Array[String]) {
+    Logger.getLogger("org").setLevel(Level.WARN)
+    Logger.getLogger("aka").setLevel(Level.WARN)
+
     val data_dir: String = input_dir + "regression/cadata/"
-    val feature_num: Int = 8
     val impurity: String = "Variance"
     val loss: String = "SquaredError"
     val max_depth: Int = 10
@@ -46,7 +49,6 @@ object RunSparkGradientBoost {
     val model: GradientBoostModel = GradientBoost.train(
       train,
       test,
-      feature_num,
       impurity,
       loss,
       max_depth,

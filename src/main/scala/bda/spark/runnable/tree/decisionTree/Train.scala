@@ -1,6 +1,8 @@
 package bda.spark.runnable.tree.decisionTree
 
+import bda.common.obj.LabeledPoint
 import bda.spark.reader.Points
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
 import bda.spark.model.tree.{DecisionTreeModel, DecisionTree}
@@ -18,16 +20,19 @@ object Train {
   case class Params(train_pt: String = "",
                     valid_pt: String = "",
                     model_pt: String = "",
-                    feature_num: Int = 0,
                     impurity: String = "Variance",
                     loss: String = "SquaredError",
                     max_depth: Int = 10,
                     max_bins: Int = 32,
-                    min_samples: Int = 10000,
+                    bin_samples: Int = 10000,
                     min_node_size: Int = 15,
                     min_info_gain: Double = 1e-6)
 
   def main(args: Array[String]) {
+    // do not show log info
+    Logger.getLogger("org").setLevel(Level.WARN)
+    Logger.getLogger("aka").setLevel(Level.WARN)
+
     val default_params = Params()
 
     val parser = new OptionParser[Params]("RunSparkDecisionTree") {
@@ -44,18 +49,15 @@ object Train {
       opt[Int]("max_bins")
         .text(s"maximum bins's number of tree, default: ${default_params.max_bins}")
         .action((x, c) => c.copy(max_bins = x))
-      opt[Int]("min_samples")
-        .text(s"minimum number of samples of tree, default: ${default_params.min_samples}")
-        .action((x, c) => c.copy(min_samples = x))
+      opt[Int]("bin_samples")
+        .text(s"minimum number of samples of tree, default: ${default_params.bin_samples}")
+        .action((x, c) => c.copy(bin_samples = x))
       opt[Int]("min_node_size")
         .text(s"minimum node size, default: ${default_params.min_node_size}")
         .action((x, c) => c.copy(min_node_size = x))
       opt[Double]("min_info_gain")
         .text(s"minimum information gain, default: ${default_params.min_info_gain}")
         .action((x, c) => c.copy(min_info_gain = x))
-      opt[Int]("feature_num").required()
-        .text(s"number of features, default: ${default_params.feature_num}")
-        .action((x, c) => c.copy(feature_num = x))
       opt[String]("train_pt").required()
         .text("input paths to the training dataset in LibSVM format")
         .action((x, c) => c.copy(train_pt = x))
@@ -75,7 +77,6 @@ object Train {
           |   --max_depth 10 --max_bins 32 \
           |   --min_samples 10000 --min_node_size 15 \
           |   --min_info_gain 1e-6 \
-          |   --feature_num 10 \
           |   --train_pt ... \
           |   --valid_pt ... \
           |   --model_pt ...
@@ -90,14 +91,16 @@ object Train {
   }
 
   def run(params: Params) {
-    val conf = new SparkConf().setAppName(s"Spark Decision Tree Training")//.setMaster("local")
+    val conf = new SparkConf()
+      .setAppName(s"Spark Decision Tree Training")
+      .set("spark.hadoop.validateOutputSpecs", "false")
     val sc = new SparkContext(conf)
 
-    val points = Points.readLibSVMFile(sc, params.train_pt)
+    val points = sc.textFile(params.train_pt).map(LabeledPoint.parse)
 
     // prepare training and validate datasets
     val (train_points, valid_points) = if (!params.valid_pt.isEmpty) {
-      val points2 = Points.readLibSVMFile(sc, params.valid_pt)
+      val points2 = sc.textFile(params.valid_pt).map(LabeledPoint.parse)
       (points, points2)
     } else {
       // train without validation
@@ -110,12 +113,11 @@ object Train {
     val model: DecisionTreeModel = DecisionTree.train(
       train_points,
       valid_points,
-      params.feature_num,
       params.impurity,
       params.loss,
       params.max_depth,
       params.max_bins,
-      params.min_samples,
+      params.bin_samples,
       params.min_node_size,
       params.min_info_gain)
 

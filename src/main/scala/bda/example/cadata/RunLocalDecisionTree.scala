@@ -1,8 +1,10 @@
 package bda.example.cadata
 
+import bda.common.util.Msg
 import bda.local.reader.Points
 import bda.local.model.tree.{DecisionTree, DecisionTreeModel}
 import bda.example.{input_dir, output_dir}
+import org.apache.log4j.{Level, Logger}
 
 /**
   * An example app for DecisionTree on cadata data set in
@@ -12,9 +14,10 @@ import bda.example.{input_dir, output_dir}
 object RunLocalDecisionTree {
 
   def main(args: Array[String]) {
+    Logger.getLogger("org").setLevel(Level.WARN)
+    Logger.getLogger("aka").setLevel(Level.WARN)
 
     val data_dir: String = input_dir + "regression/cadata/"
-    val feature_num: Int = 8
     val impurity: String = "Variance"
     val loss: String = "SquaredError"
     val max_depth: Int = 10
@@ -23,7 +26,7 @@ object RunLocalDecisionTree {
     val min_node_size: Int = 15
     val min_info_gain: Double = 1e-6
     val row_rate: Double = 1
-    val col_rate: Double = 0.6
+    val col_rate: Double = 1
     val model_pt = output_dir + "dtree.model"
 
     val train_points = Points.readLibSVMFile(data_dir + "cadata.train")
@@ -31,7 +34,6 @@ object RunLocalDecisionTree {
 
     val model: DecisionTreeModel = DecisionTree.train(train_points,
       test_points,
-      feature_num,
       impurity,
       loss,
       max_depth,

@@ -24,7 +24,7 @@ object GradientBoost {
     * @param loss Loss function type with String, default is "SquaredError".
     * @param max_depth Maximum depth of the decision tree, default is 10.
     * @param max_bins Maximum number of bins, default is 32.
-    * @param min_samples Minimum number of samples used in finding splits and bins, default is 10000.
+    * @param bin_samples Minimum number of samples used in finding splits and bins, default is 10000.
     * @param min_node_size Minimum number of instances in the leaf, default is 15.
     * @param min_info_gain Minimum information gain while spliting, default is 1e-6.
     * @param row_rate sample ratio of train data set, default is 0.6.
@@ -36,12 +36,11 @@ object GradientBoost {
     */
   def train(train_data: RDD[LabeledPoint],
             valid_data: RDD[LabeledPoint] = null,
-            feature_num: Int = 0,
             impurity: String = "Variance",
             loss: String = "SquaredError",
             max_depth: Int = 10,
             max_bins: Int = 32,
-            min_samples: Int = 10000,
+            bin_samples: Int = 10000,
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6,
             row_rate: Double = 0.6,
@@ -50,12 +49,11 @@ object GradientBoost {
             learn_rate: Double = 0.02,
             min_step: Double = 1e-5): GradientBoostModel = {
 
-    new GradientBoostTrainer(feature_num,
-      Impurity.fromString(impurity),
+    new GradientBoostTrainer(Impurity.fromString(impurity),
       Loss.fromString(loss),
       max_depth,
       max_bins,
-      min_samples,
+      bin_samples,
       min_node_size,
       min_info_gain,
       row_rate,
@@ -82,8 +80,7 @@ object GradientBoost {
   * @param learn_rate Value of learning rate.
   * @param min_step Minimum step of each iteration, or stop it.
   */
-private[tree] class GradientBoostTrainer(feature_num: Int,
-                                         impurity: Impurity,
+private[tree] class GradientBoostTrainer(impurity: Impurity,
                                          loss: Loss,
                                          max_depth: Int,
                                          max_bins: Int,
@@ -117,6 +114,29 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
     */
   def train(train_data: RDD[LabeledPoint],
             valid_data: RDD[LabeledPoint]): GradientBoostModel = {
+    val n_train = train_data.count().toInt
+    val n_valid = valid_data match {
+      case null => 0
+      case _ => valid_data.count().toInt
+    }
+
+    // logging the input parameters
+    val msg_para = Msg("n(train)" -> n_train,
+      "n(valid)" -> n_valid,
+      "impurity" -> impurity,
+      "loss" -> loss,
+      "max_depth" -> max_depth,
+      "max_bins" -> max_bins,
+      "bin_samples" -> bin_samples,
+      "min_node_size" -> min_node_size,
+      "min_info_gain" -> min_info_gain,
+      "row_rate" -> row_rate,
+      "col_rate" -> col_rate,
+      "num_iter" -> num_iter,
+      "learn_rate" -> learn_rate,
+      "min_step" -> min_step)
+    logInfo(msg_para.toString)
+
     val loss_calculator = this.loss_calculator
     val wk_learners = new Array[DecisionTreeNode](num_iter)
 
@@ -137,8 +157,7 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
     var data = train_data
 
     // build weak learner 0
-    val wl0 = new DecisionTreeTrainer(feature_num,
-      impurity,
+    val wl0 = new DecisionTreeTrainer(impurity,
       loss,
       max_depth,
       max_bins,
@@ -155,7 +174,7 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
 
     // compute prediction and RMSE for validation data
     var valid_pred = if (null != valid_data) {
-      computePredict(data, learn_rate, wl0.root, loss_calculator).persist()
+      computePredict(valid_data, learn_rate, wl0.root, loss_calculator).persist()
     } else {
       null
     }
@@ -191,8 +210,7 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
       }
 
       // building weak leaner #iter
-      val wl = new DecisionTreeTrainer(feature_num,
-        impurity,
+      val wl = new DecisionTreeTrainer(impurity,
         loss,
         max_depth,
         max_bins,
@@ -215,26 +233,22 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
         train_pred.checkpoint()
       }
       train_pre_pred.unpersist()
-      if (iter % 20 == 0) {
-        train_pred.checkpoint()
-      }
-      train_pre_pred.unpersist()
       train_rmse = RMSE(train_data.map(_.label).zip(train_pred))
 
 
       // compute prediction and error for validatoin data
-      val valid_pre_pred_err = valid_pred
+      val valid_pre_pred = valid_pred
       if (null != valid_data) {
         valid_pred = updatePredict(
           valid_data,
-          valid_pre_pred_err,
+          valid_pre_pred,
           learn_rate,
           wl.root,
           loss_calculator).persist()
         if (0 == (iter % 20)) {
-          valid_pred.localCheckpoint()
+          valid_pred.checkpoint()
         }
-        valid_pre_pred_err.unpersist()
+        valid_pre_pred.unpersist()
         valid_rmse = RMSE(valid_data.map(_.label).zip(valid_pred))
       }
 
@@ -250,13 +264,11 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
       }
       msg.append("time cost", now_time_cost)
       logInfo(msg.toString)
-      // Log.log("INFO", s"fitting: iter = $iter, error = $train_err, cost_time = $now_time_cost")
 
       if (min_rmse - train_rmse < min_step) {
 
         logInfo(s"Gradient Boost model training done, average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count})")
         return new GradientBoostModel(wk_learners.slice(0, best_iter),
-          feature_num,
           impurity,
           loss,
           max_depth,
@@ -289,7 +301,6 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
     }
 
     new GradientBoostModel(wk_learners.slice(0, best_iter),
-      feature_num,
       impurity,
       loss,
       max_depth,
@@ -369,7 +380,6 @@ private[tree] class GradientBoostTrainer(feature_num: Int,
   * @param loss_calculator Loss calculator.
   */
 class GradientBoostModel(val wk_learners: Array[DecisionTreeNode],
-                         val feature_num: Int,
                          val impurity: Impurity,
                          val loss: Loss,
                          val max_depth: Int,

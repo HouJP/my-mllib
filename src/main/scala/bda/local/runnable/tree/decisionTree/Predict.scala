@@ -1,6 +1,7 @@
 package bda.local.runnable.tree.decisionTree
 
-import bda.common.util.io.writeLines
+import bda.common.obj.LabeledPoint
+import bda.common.util.io._
 import bda.local.reader.Points.readLibSVMFile
 import scopt.OptionParser
 import bda.local.model.tree.DecisionTreeModel
@@ -60,7 +61,7 @@ object Predict {
   def run(params: Params) {
 
     val model: DecisionTreeModel = DecisionTreeModel.load(params.model_pt)
-    val points =  readLibSVMFile(params.test_pt)
+    val points =  readLines(params.test_pt).map(LabeledPoint.parse).toSeq
     val predictions = model.predict(points).zip(points).map {
       case (y, pn) => s"$y\t$pn"
     }

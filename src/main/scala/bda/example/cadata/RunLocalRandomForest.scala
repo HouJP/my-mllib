@@ -3,6 +3,7 @@ package bda.example.cadata
 import bda.local.reader.Points
 import bda.local.model.tree.{RandomForestModel, RandomForest}
 import bda.example.{input_dir, output_dir}
+import org.apache.log4j.{Level, Logger}
 
 /**
  * An example app for random forest on cadata data set(https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/regression.html#cadata).
@@ -11,8 +12,10 @@ import bda.example.{input_dir, output_dir}
 object RunLocalRandomForest {
 
   def main(args: Array[String]) {
+    Logger.getLogger("org").setLevel(Level.WARN)
+    Logger.getLogger("aka").setLevel(Level.WARN)
+
     val data_dir: String = input_dir + "regression/cadata/"
-    val feature_num: Int = 8
     val impurity: String = "Variance"
     val loss: String = "SquaredError"
     val max_depth: Int = 10
@@ -30,7 +33,6 @@ object RunLocalRandomForest {
 
     val model: RandomForestModel = RandomForest.train(train,
       test,
-      feature_num,
       impurity,
       loss,
       max_depth,

@@ -1,7 +1,8 @@
 package bda.local.runnable.tree.randomForest
 
+import bda.common.obj.LabeledPoint
 import bda.local.reader.Points.readLibSVMFile
-import bda.common.util.io.writeLines
+import bda.common.util.io._
 import scopt.OptionParser
 import bda.local.model.tree.RandomForestModel
 
@@ -60,7 +61,7 @@ object Predict {
   def run(params: Params) {
 
     val model: RandomForestModel = RandomForestModel.load(params.model_pt)
-    val points = readLibSVMFile(params.test_pt).toSeq
+    val points = readLines(params.test_pt).map(LabeledPoint.parse).toSeq
 
     val predictions = model.predict(points).zip(points).map {
       case (y, pn) => s"$y\t$pn"

@@ -54,7 +54,7 @@ object Points extends Logging {
         // for binary class
         if (label < 0) 0.0 else label
       }
-      val fs = SparseVector(n_feature, fvs)
+      val fs = SparseVector(fvs)
       LabeledPoint(new_label, fs)
     }
   }

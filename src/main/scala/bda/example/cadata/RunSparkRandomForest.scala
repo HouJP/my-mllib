@@ -19,7 +19,6 @@ object RunSparkRandomForest {
     Logger.getLogger("aka").setLevel(Level.WARN)
 
     val data_dir: String = input_dir + "regression/cadata/"
-    val feature_num: Int = 8
     val impurity: String = "Variance"
     val loss: String = "SquaredError"
     val max_depth: Int = 10
@@ -46,7 +45,6 @@ object RunSparkRandomForest {
     val model: RandomForestModel = RandomForest.train(
       train,
       test,
-      feature_num,
       impurity,
       loss,
       max_depth,
