@@ -1,6 +1,5 @@
 package bda.example.cadata
 
-import bda.common.util.Msg
 import bda.local.reader.Points
 import bda.local.model.tree.{DecisionTree, DecisionTreeModel}
 import bda.example.{input_dir, output_dir}

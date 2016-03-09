@@ -43,7 +43,7 @@ object Points extends Logging {
 
     val n_label = rds.map(_._1).distinct().count().toInt
     val n_feature = rds.map(_._2.map(_._1).max).max + 1
-    logInfo(s"n(label)=${n_label}, n(feature)=${n_feature}")
+    logInfo(s"n(label)=$n_label, n(feature)=$n_feature")
 
     // transform to labeled points, and adjust label
     rds.map { case (label, fvs) =>

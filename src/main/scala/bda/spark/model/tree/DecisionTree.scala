@@ -719,7 +719,7 @@ private[tree] object DecisionTreePoint {
 
     val binned_fs = new Array[Int](num_fs)
     for (index_f <- 0 until num_fs) {
-      val binned_f = binarySearchForBin(lp.fs(index_f), index_f, bins, num_bins_all, num_fs)
+      val binned_f = binarySearchForBin(lp.fs(index_f), index_f, bins, num_bins_all)
 
       // check the binned feature
       require(-1 != binned_f, s"Point with label = ${lp.label} couldn't find correct bin" +
@@ -747,14 +747,12 @@ private[tree] object DecisionTreePoint {
    * @param index_feature Id of feature.
    * @param bins Bins of all features.
    * @param num_bins_all Number of bins of all features.
-   * @param num_fs Number of features.
    * @return Id of bin with specified feature.
    */
   def binarySearchForBin(value: Double,
                          index_feature: Int,
                          bins: Array[Array[DecisionTreeBin]],
-                         num_bins_all: Array[Int],
-                         num_fs: Int): Int = {
+                         num_bins_all: Array[Int]): Int = {
 
     var index_l = 0
     var index_r = num_bins_all(index_feature) - 1
