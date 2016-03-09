@@ -32,14 +32,10 @@ private[cart] class CARTNode (val id: Int,
 
     val info_gain = impurity - best_split.weight_impurity
 
-    println("Into Split ...")
-
     if ((info_gain >= min_info_gain)
       && (depth < max_depth)
       && (best_split.l_count >= min_node_size)
       && (best_split.r_count >= min_node_size)) {
-
-      println("Into grow LR child ...")
 
       is_leaf = false
       split = Some(best_split.split)
@@ -48,13 +44,13 @@ private[cart] class CARTNode (val id: Int,
         n_fs,
         col_rate,
         best_split.l_impurity,
-        best_split.l_count))
+        best_split.l_predit))
       right_child = Some(new CARTNode((id << 1) + 1,
         depth + 1,
         n_fs,
         col_rate,
         best_split.r_impurity,
-        best_split.r_count))
+        best_split.r_predict))
     }
   }
 }

@@ -17,7 +17,7 @@ object CART {
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6,
             row_rate: Double = 1.0,
-            col_rate: Double = 1.0): Unit = {
+            col_rate: Double = 1.0): CARTModel = {
 
     new CART(Impurities.fromString(impurity),
       max_depth,
@@ -60,7 +60,7 @@ class CART(impurity: Impurity,
            row_rate: Double,
            col_rate: Double) extends Logging {
 
-  def train(train_data: RDD[LabeledPoint]) = {
+  def train(train_data: RDD[LabeledPoint]): CARTModel = {
     val impurity = this.impurity
     val n_train = train_data.count().toInt
     val n_fs = train_data.map(_.fs.maxActiveIndex).max + 1
@@ -70,29 +70,25 @@ class CART(impurity: Impurity,
     val (splits, bins) = findSplitsBins(train_data, n_train, n_fs, n_bins)
 
     // Convert LabeledPoint to CARTPoint
-    val cart_ps = CARTPoint.toCARTPoint(train_data, splits, n_fs, row_rate)
+    val cart_ps = CARTPoint.toCARTPoint(train_data, splits, n_fs, row_rate).persist()
 
     val root_stat = impurity.stat(cart_ps)
     val root_iprt = impurity.calculate(root_stat)
     val root_pred = impurity.predict(root_stat)
     val root = new CARTNode(1, 0, n_fs, col_rate, root_iprt, root_pred)
-    println(s"root_stat($root_stat), root_iprt($root_iprt), root_pred($root_pred)")
 
     val node_que = mutable.Queue(root)
     while (node_que.nonEmpty) {
       val leaves = findCARTNodesToSplit(node_que)
-      println(s"size(leaves)=${leaves.length}")
       val id_leaves = leaves.map(_.id)
       val id_pos_leaves = id_leaves.zipWithIndex.toMap
       val n_leaves = leaves.length
       val agg_leaves = cart_ps.mapPartitions {
         ps =>
           val aggs = Array.tabulate(n_leaves)(id => impurity.agg(root_stat, n_bins))
-
           ps.foreach {
             p =>
               val id_leaf = CART.findLeafID(p, root, bins)
-              println(s"p($p), id_leaf($id_leaf)")
               if (id_pos_leaves.contains(id_leaf)) {
                 val pos_leaf = id_pos_leaves(id_leaf)
                 aggs(pos_leaf).update(p, leaves(pos_leaf).sub_fs)
@@ -103,17 +99,28 @@ class CART(impurity: Impurity,
 
       // Find best splits for leaves
       val best_splits = findBestSplits(agg_leaves, n_bins, n_sub_fs, leaves, bins, impurity)
-
       best_splits.foreach {
         case (pos, best_split) =>
           leaves(pos).split(best_split, max_depth, min_info_gain, min_node_size)
           CART.inQueue(node_que, leaves(pos).left_child)
           CART.inQueue(node_que, leaves(pos).right_child)
       }
-
     }
 
-    CARTModel.printStructure(root)
+    // CARTModel.printStructure(root)
+
+    cart_ps.unpersist()
+
+    new CARTModel(root,
+      n_fs,
+      impurity,
+      max_depth,
+      max_bins,
+      bin_samples,
+      min_node_size,
+      min_info_gain,
+      row_rate,
+      col_rate)
   }
 
   def findBestSplits(agg_leaves: RDD[(Int, ImpurityAggregator)],
@@ -126,7 +133,7 @@ class CART(impurity: Impurity,
       case (pos, agg) =>
         agg.toPrefixSum(n_bins)
 
-        val best_split = Range(0, n_sub_fs).map {
+        val best_split = Range(0, n_sub_fs).flatMap {
           id_sub_f =>
             val id_f = leaves(pos).sub_fs(id_sub_f)
             val n_split = n_bins(id_f) - 1
@@ -137,10 +144,10 @@ class CART(impurity: Impurity,
 
                 val weighted_impurity = impurity.calculate_weighted(l_count, r_count, l_impurity, r_impurity)
 
-                println(s"id_f($id_f),id_b($id_s)")
-                println(s"l_impurity($l_impurity),l_predict($l_predict),l_total($l_count)")
-                println(s"r_impurity($r_impurity),r_predict($r_predict),r_total($r_count)")
-                println(s"weighted_impurity($weighted_impurity)")
+//                println(s"id_f($id_f),id_b($id_s)")
+//                println(s"l_impurity($l_impurity),l_predict($l_predict),l_total($l_count)")
+//                println(s"r_impurity($r_impurity),r_predict($r_predict),r_total($r_count)")
+//                println(s"weighted_impurity($weighted_impurity)")
 
                 CARTBestSplit(weighted_impurity,
                   l_impurity,
@@ -150,7 +157,7 @@ class CART(impurity: Impurity,
                   l_count,
                   r_count,
                   bins(id_f)(id_s).high_split)
-            }.minBy(_.weight_impurity)
+            }//.minBy(_.weight_impurity)
         }.minBy(_.weight_impurity)
 
         (pos, best_split)
@@ -174,7 +181,6 @@ class CART(impurity: Impurity,
     val n_samples = math.max(max_bins * max_bins, bin_samples)
     val r_samples = math.min(n_samples, n_train).toDouble / n_train.toDouble
     val sampled_data = train_data.sample(withReplacement = false, fraction = r_samples).collect()
-    logInfo(s"rate(samples)=$r_samples")
 
     val splits = new Array[Array[CARTSplit]](n_fs)
     val bins = new Array[Array[CARTBin]](n_fs)
@@ -197,14 +203,16 @@ class CART(impurity: Impurity,
             splits(id_f)(id_split) = new CARTSplit(id_f, split_vs(id_split))
         }
         // Generate bins
-        bins(id_f)(0) = new CARTBin(CARTSplit.lowest(id_f), splits(id_f).head)
-        Range(1, n_split).foreach {
-          id_bin =>
-            bins(id_f)(id_bin) = new CARTBin(splits(id_f)(id_bin - 1), splits(id_f)(id_bin))
+        if (n_bin == 1) {
+          bins(id_f)(0) = new CARTBin(CARTSplit.lowest(id_f), CARTSplit.highest(id_f))
+        } else {
+          bins(id_f)(0) = new CARTBin(CARTSplit.lowest(id_f), splits(id_f).head)
+          Range(1, n_split).foreach {
+            id_bin =>
+              bins(id_f)(id_bin) = new CARTBin(splits(id_f)(id_bin - 1), splits(id_f)(id_bin))
+          }
+          bins(id_f)(n_split) = new CARTBin(splits(id_f).last, CARTSplit.highest(id_f))
         }
-        bins(id_f)(n_split) = new CARTBin(splits(id_f).last, CARTSplit.highest(id_f))
-
-        println(s"HouJP >> id_f($id_f), split values(${split_vs.mkString(",")})")
     }
 
     (splits, bins)

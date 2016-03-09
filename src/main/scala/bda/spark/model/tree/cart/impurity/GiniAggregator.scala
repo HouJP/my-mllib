@@ -13,8 +13,6 @@ private[cart] class GiniAggregator(off_fs: Array[Int],
     val off_l = off_b + map_label(label) + 1
     stats(off_b) += weight
     stats(off_l) += weight
-    if (off_b == 4 || off_l == 4)
-    println(s"lable($label),weight($weight),id_f($id_f),binned_f($binned_f),off_b($off_b),off_l($off_l)")
   }
 
   def update(point: CARTPoint, sub_fs: Array[Int]) = {
