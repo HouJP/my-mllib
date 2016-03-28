@@ -20,8 +20,8 @@ The project implemented some machine learning algorithms on spark which is writt
 
 You can find these ML algorithms up to now:
 
-*	Decision Tree
-*	Gradient Boosted Decision Tree
+*	Classification And Regression Trees
+*	Gradient Boosting Decision Trees
 *	Random Forest
 
 ****
@@ -101,34 +101,37 @@ TODO
 ****
 
 ###<a name="version">Version Updating</a>
-*	2015/12/31
+
+*	03/09/2016
+	*	finished CART(Classification And Regression Trees), used gini for classification and variance for regression.
+*	12/31/2015
 	* 	changed implementation of standalone decision tree algorithm (use bins) which made tree algorithms run faster.
 	*	implemented random forest algorithm of standalone/distributed mode.
 
-*	2015/12/01
+*	12/01/2015
 	*	changed implementation in distributed decision tree algorithm (use bins).
 	*	implemented bda.spark.model.tree.DecisionTree and bda.spark.model.tree.GradientBoost.
 
-*	2015/10/15
+*	10/15/2015
 	*	fixed StackOverflowError when number of iteration is too large (>300).
 	*	evaluate performance of bda.spark.ml.GBoost.
 	
-*	2015/10/14
+*	10/14/2015
 	*	implement gbdt algorithm running on spark
 	*	issues
 		*	meet StackOverflowError when number of iteration is too large.
 		
-*	2015/09/29
+*	09/29/2015
 	*	use xgboost to generate baseline for performance evaluation
 
-*	2015/09/27
+*	09/27/2015
 	* 	implement gbdt algorithm running on local
 
-*	2015/09/25
+*	09/25/2015
 	*	use sklearn.tree.DecisionTreeRegressor to generate baseline for performance evaluation
 	*	add code comments for decision tree
 
-*	2015/09/23
+*	09/23/2015
 	*	implementations
 		*	implement decision tree which can be used to rain and predict and running on local
 	*	issues
