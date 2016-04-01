@@ -2,6 +2,16 @@ package bda.spark.model.tree.cart
 
 import bda.common.util.Sampler
 
+/**
+  * Class of nodes which form a CART model.
+  *
+  * @param id ID of the node, 1-based
+  * @param depth depth of the node in a CART model, 0-based
+  * @param n_fs number of features
+  * @param col_rate sampling ratio of features
+  * @param impurity impurity value of the node
+  * @param predict prediction value of the node
+  */
 private[cart] class CARTNode (val id: Int,
                               val depth: Int,
                               val n_fs: Int,
@@ -20,11 +30,28 @@ private[cart] class CARTNode (val id: Int,
   /** sub features */
   val sub_fs = Sampler.subSample(n_fs, col_rate)
 
+  /**
+    * Method to convert the node into a [[String]].
+    *
+    * @return a instance of [[String]] represented the node
+    */
   override def toString = {
     s"id($id), depth($depth), impurity($impurity), predict($predict), " +
-      s"split(${split.getOrElse("NoSplit")}), sub_fs(${sub_fs.mkString(",")})"
+      s"split(${split.getOrElse("NoSplit")})"//, sub_fs(${sub_fs.mkString(",")})"
   }
 
+  /**
+    * Method to split the node if satisfies conditions:
+    *     1.  information gain >= params.min_info_gain
+    *     2.  depth < params.max_depth
+    *     3.  labels count of left child >= params.min_node_size
+    *     4.  labels count of right child >= params.min_node_size
+    *
+    * @param best_split best split of the node
+    * @param max_depth maximum of depth
+    * @param min_info_gain minimum information gain while splitting
+    * @param min_node_size minimum size of leaves
+    */
   def split(best_split: CARTBestSplit,
             max_depth: Int,
             min_info_gain: Double,
@@ -53,8 +80,4 @@ private[cart] class CARTNode (val id: Int,
         best_split.r_predict))
     }
   }
-}
-
-private[cart] object CARTNode {
-
 }

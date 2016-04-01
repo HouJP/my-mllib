@@ -7,13 +7,13 @@ import bda.example.{input_dir, output_dir}
 import org.apache.log4j.{Level, Logger}
 
 /**
-  * An example app for DecisionTree on cadata data set.
-  * (https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/regression.html#cadata).
-  * The cadata dataset can ben found at `testData/regression/cadata/`.
+  * An example app for CART(Classification And Regression Trees) on a1a data set.
+  * (https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html#a1a).
+  * The a1a dataset can ben found at `data/classification/a1a`.
   * If you use it as a template to create your own app, please use
   * `spark-submit` to submit your app.
   */
-object RunSparkCART {
+object RunSparkCARTForClassification {
 
   def main(args: Array[String]) {
     Logger.getLogger("org").setLevel(Level.WARN)
@@ -21,8 +21,8 @@ object RunSparkCART {
 
     val data_dir: String = input_dir + "classification/a1a/"
     val impurity: String = "Gini"
-    val max_depth: Int = 2
-    val min_node_size: Int = 10
+    val max_depth: Int = 10
+    val min_node_size: Int = 50
     val min_info_gain: Double = 1e-6
     val max_bins: Int = 32
     val bin_samples: Int = 10000
@@ -32,7 +32,7 @@ object RunSparkCART {
 
     val conf = new SparkConf()
       .setMaster("local[4]")
-      .setAppName(s"Spark Decision Tree Training of cadata dataset")
+      .setAppName(s"Spark CART Training of a1a dataset")
       .set("spark.hadoop.validateOutputSpecs", "false")
 
     val sc = new SparkContext(conf)
@@ -54,7 +54,7 @@ object RunSparkCART {
       row_rate,
       col_rate)
 
-    cart_model.printStructure
+    cart_model.printStructure()
 
     val preds = cart_model.predict(test)
 

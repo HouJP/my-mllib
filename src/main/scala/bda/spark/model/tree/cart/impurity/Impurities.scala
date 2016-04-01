@@ -1,7 +1,16 @@
 package bda.spark.model.tree.cart.impurity
 
+/**
+  * Enum to select the impurity type for the algorithm.
+  */
 object Impurities {
 
+  /**
+    * Method to onvert [[String]] to [[Impurity]].
+    *
+    * @param s type of impurity
+    * @return an instance of [[Impurity]]
+    */
   def fromString(s: String): Impurity = {
     s match {
       case "Gini" | "gini" => Gini

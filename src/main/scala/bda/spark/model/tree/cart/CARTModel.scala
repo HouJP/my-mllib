@@ -6,6 +6,20 @@ import bda.spark.model.tree.cart.impurity.Impurity
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
+/**
+  * Model of CART(Classification And Regression Trees).
+  *
+  * @param root root node of CART structure
+  * @param n_fs number of features
+  * @param impurity an instance of [[Impurity]]
+  * @param max_depth maximum depth of CART
+  * @param max_bins maximum number of bins
+  * @param bin_samples minimum number of samples used in finding splits and bins
+  * @param min_node_size minimum number of data point instances in leaves
+  * @param min_info_gain minimum information gain while splitting
+  * @param row_rate sampling ratio of training data set
+  * @param col_rate sampling ratio of features
+  */
 class CARTModel(root: CARTNode,
                 n_fs: Int,
                 impurity: Impurity,
@@ -17,23 +31,58 @@ class CARTModel(root: CARTNode,
                 row_rate: Double,
                 col_rate: Double) extends Serializable {
 
+  /**
+    * Predict values for the given data using the model trained.
+    *
+    * @param input test data set which represented as a RDD of [[LabeledPoint]]
+    * @return a RDD stored predictions.
+    */
   def predict(input: RDD[LabeledPoint]): RDD[(Double, Double)] = {
     val root = this.root
     input.map(lp => (lp.label, CARTModel.predict(lp.fs, root)))
   }
 
+  /**
+    * Predict value for the specified data point using the model trained.
+    *
+    * @param p test data point represented as an instance of [[SparseVector]]
+    * @return the prediction for specified data point
+    */
+  def predict(p: SparseVector[Double]): Double = {
+    CARTModel.predict(p, root)
+  }
+
+  /**
+    * Method to store model of CART on disk.
+    *
+    * @param sc an instance of [[SparkContext]]
+    * @param pt path of the model location on disk
+    */
   def save(sc: SparkContext, pt: String): Unit = {
     val model_rdd = sc.makeRDD(Seq(this))
     model_rdd.saveAsObjectFile(pt)
   }
 
-  def printStructure = {
+  /**
+    * Method to print structure of CART model.
+    */
+  def printStructure() = {
     CARTModel.printStructure(this.root)
   }
 }
 
+/**
+  * Static methods for [[CARTModel]].
+  */
 object CARTModel {
 
+  /**
+    * Method to predict value for single data point using the model trained.
+    *
+    * @param fs feature vector of single data point
+    * @param root root of CART model
+    * @return the prediction for specified data point
+    */
   private[cart] def predict(fs: SparseVector[Double], root: CARTNode): Double = {
     var node = root
     while (!node.is_leaf) {
@@ -46,6 +95,11 @@ object CARTModel {
     node.predict
   }
 
+  /**
+    * Method to print structure of CART model.
+    *
+    * @param root root of CART model
+    */
   def printStructure(root: CARTNode): Unit = {
     val prefix = Array.fill[String](root.depth)("|---").mkString("")
     println(s"$prefix$root")

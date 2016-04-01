@@ -7,8 +7,25 @@ import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable
 
+/**
+  * External interface of CART(Classification And Regression Trees) on spark.
+  */
 object CART {
 
+  /**
+    * An adapter for training a CART model.
+    *
+    * @param train_data training data points
+    * @param impurity impurity type with [[String]], default is "Variance"
+    * @param max_depth maximum depth of the CART default is 10
+    * @param max_bins maximum number of bins, default is 32
+    * @param bin_samples minimum number of samples used to find [[CARTSplit]] and [[CARTBin]], default is 10000
+    * @param min_node_size minimum number of instances in leaves, default is 15
+    * @param min_info_gain minimum infomation gain while splitting, default is 1e-6
+    * @param row_rate sample ratio of training data points
+    * @param col_rate sample ratio of features
+    * @return an instance of [[CART]]
+    */
   def train(train_data: RDD[LabeledPoint],
             impurity: String = "Variance",
             max_depth: Int = 10,
@@ -29,6 +46,14 @@ object CART {
       col_rate).train(train_data)
   }
 
+  /**
+    * Method to find ID of splitting node which contains specified data point.
+    *
+    * @param p specified data point
+    * @param root root of the CART
+    * @param bins a two dimension array stored bins of all features
+    * @return ID of splitting node which contains specified data point
+    */
   def findLeafID(p: CARTPoint, root: CARTNode, bins: Array[Array[CARTBin]]): Int = {
     var leaf = root
     while (!leaf.is_leaf) {
@@ -43,6 +68,12 @@ object CART {
     leaf.id
   }
 
+  /**
+    * Push the child into the queue as a new splitting node if isn't [[None]].
+    *
+    * @param que queue stored splitting nodes
+    * @param node left or right child of the splitting node
+    */
   def inQueue(que :mutable.Queue[CARTNode], node: Option[CARTNode]): Unit = {
     node match {
       case Some(n) => que.enqueue(n)
@@ -51,6 +82,18 @@ object CART {
   }
 }
 
+/**
+  * Class of CART(Classification And Regression Trees)
+  *
+  * @param impurity an instance of [[Impurity]]
+  * @param max_depth maximum depth of CART
+  * @param max_bins maximum number of bins
+  * @param bin_samples minimum number of samples used to find [[CARTSplit]] and [[CARTBin]]
+  * @param min_node_size minimum number of instances in leaves
+  * @param min_info_gain minimum information gain while splitting
+  * @param row_rate sample ratio of training data set
+  * @param col_rate sample ratio of features
+  */
 class CART(impurity: Impurity,
            max_depth: Int,
            max_bins: Int,
@@ -60,6 +103,12 @@ class CART(impurity: Impurity,
            row_rate: Double,
            col_rate: Double) extends Logging {
 
+  /**
+    * Method to train a CART model over training data set.
+    *
+    * @param train_data training data set represented as a RDD of [[LabeledPoint]]
+    * @return an instance of [[CARTModel]]
+    */
   def train(train_data: RDD[LabeledPoint]): CARTModel = {
     val impurity = this.impurity
     val n_train = train_data.count().toInt
@@ -72,6 +121,7 @@ class CART(impurity: Impurity,
     // Convert LabeledPoint to CARTPoint
     val cart_ps = CARTPoint.toCARTPoint(train_data, splits, n_fs, row_rate).persist()
 
+    // Compute impurity and prediction for root node
     val root_stat = impurity.stat(cart_ps)
     val root_iprt = impurity.calculate(root_stat)
     val root_pred = impurity.predict(root_stat)
@@ -79,8 +129,11 @@ class CART(impurity: Impurity,
 
     val node_que = mutable.Queue(root)
     while (node_que.nonEmpty) {
+      // Get splitting nodes
       val leaves = findCARTNodesToSplit(node_que)
+      // Get node-id of splitting nodes
       val id_leaves = leaves.map(_.id)
+      // Map node-id to position-id
       val id_pos_leaves = id_leaves.zipWithIndex.toMap
       val n_leaves = leaves.length
       val agg_leaves = cart_ps.mapPartitions {
@@ -107,8 +160,6 @@ class CART(impurity: Impurity,
       }
     }
 
-    // CARTModel.printStructure(root)
-
     cart_ps.unpersist()
 
     new CARTModel(root,
@@ -123,6 +174,17 @@ class CART(impurity: Impurity,
       col_rate)
   }
 
+  /**
+    * Method to find best splits for splitting nodes.
+    *
+    * @param agg_leaves impurity aggregator for splitting nodes
+    * @param n_bins number of bins for all features
+    * @param n_sub_fs number of sub features
+    * @param leaves an array stored leaves
+    * @param bins bins of all features
+    * @param impurity an instance of [[Impurity]]
+    * @return (position-id, [[CARTBestSplit]])
+    */
   def findBestSplits(agg_leaves: RDD[(Int, ImpurityAggregator)],
                      n_bins: Array[Int],
                      n_sub_fs: Int,
@@ -131,7 +193,7 @@ class CART(impurity: Impurity,
                      impurity: Impurity): Map[Int, CARTBestSplit] = {
     agg_leaves.map {
       case (pos, agg) =>
-        agg.toPrefixSum(n_bins)
+        agg.toPrefixSum
 
         val best_split = Range(0, n_sub_fs).flatMap {
           id_sub_f =>
@@ -143,11 +205,6 @@ class CART(impurity: Impurity,
                 val (r_impurity, r_predict, r_count) = agg.calRightInfo(id_f, id_s)
 
                 val weighted_impurity = impurity.calculate_weighted(l_count, r_count, l_impurity, r_impurity)
-
-//                println(s"id_f($id_f),id_b($id_s)")
-//                println(s"l_impurity($l_impurity),l_predict($l_predict),l_total($l_count)")
-//                println(s"r_impurity($r_impurity),r_predict($r_predict),r_total($r_count)")
-//                println(s"weighted_impurity($weighted_impurity)")
 
                 CARTBestSplit(weighted_impurity,
                   l_impurity,
@@ -164,6 +221,12 @@ class CART(impurity: Impurity,
     }.collectAsMap().toMap
   }
 
+  /**
+    * Method to collect splitting nodes.
+    *
+    * @param node_que a queue stored all splitting nodes
+    * @return an array of [[CARTNode]] which will split next time
+    */
   def findCARTNodesToSplit(node_que: mutable.Queue[CARTNode]): Array[CARTNode] = {
     val nodes_builder = mutable.ArrayBuilder.make[CARTNode]
     while (node_que.nonEmpty) {
@@ -172,10 +235,19 @@ class CART(impurity: Impurity,
     nodes_builder.result()
   }
 
+  /**
+    * Method to find splits and bins for features.
+    *
+    * @param train_data training data set represented as a RDD of [[LabeledPoint]]
+    * @param n_train size of training data set
+    * @param n_fs number of features
+    * @param n_bins number of bins for features
+    * @return (Array(Array([[CARTSplit]]), Array(Array([[CARTBin]])))
+    */
   def findSplitsBins(train_data: RDD[LabeledPoint],
                      n_train: Int,
                      n_fs: Int,
-                     n_bins: Array[Int]) = {
+                     n_bins: Array[Int]): (Array[Array[CARTSplit]], Array[Array[CARTBin]]) = {
 
     // Sample the input data to generate splits and bins
     val n_samples = math.max(max_bins * max_bins, bin_samples)
@@ -218,7 +290,17 @@ class CART(impurity: Impurity,
     (splits, bins)
   }
 
-  def findSplitVS(sampled_f: Array[Double], id_f: Int, n_bins: Array[Int]): Array[Double] = {
+  /**
+    * Method to find splits for specified feature with sampled training data set.
+    *
+    * @param sampled_f sampled value of specified feature
+    * @param id_f ID of specified feature, indexed from 0
+    * @param n_bins nube of bins for all features
+    * @return an array stored values of splits for specified feature
+    */
+  def findSplitVS(sampled_f: Array[Double],
+                  id_f: Int,
+                  n_bins: Array[Int]): Array[Double] = {
 
     // Count number of each distinct value
     val cnt = sampled_f.foldLeft(Map.empty[Double, Int]) {
@@ -229,7 +311,6 @@ class CART(impurity: Impurity,
     if (possible_vs <= n_bins(id_f)) {
       cnt.map(_._1).slice(1, possible_vs)
     } else {
-      val svs_builder = mutable.ArrayBuilder.make[Double]
       val ave = sampled_f.length.toDouble / n_bins(id_f)
       val n_sp = n_bins(id_f) - 1
       val sp = new Array[Double](n_sp)
