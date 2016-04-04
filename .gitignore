@@ -23,6 +23,10 @@ conf/*
 out
 out/*
 
+doc/*
+!doc/img/
+!doc/trees.tex
+
 .*
 .gitignore
 .DS_Store
