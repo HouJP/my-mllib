@@ -1,27 +1,19 @@
 
 .idea/
-.idea/*
 
 target
-target/*
 
 data
-data/*
 
 project/target
-project/target/*
 
 project/project/target
-project/project/target/*
 
 bin
-bin/*
 
 conf
-conf/*
 
 out
-out/*
 
 doc/*
 !doc/img/
