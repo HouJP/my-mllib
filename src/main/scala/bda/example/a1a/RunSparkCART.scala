@@ -1,10 +1,10 @@
-package bda.example.cadata
+package bda.example.a1a
 
-import bda.spark.reader.Points
-import org.apache.spark.{SparkContext, SparkConf}
+import bda.example.input_dir
 import bda.spark.model.tree.cart.CART
-import bda.example.{input_dir, output_dir}
+import bda.spark.reader.Points
 import org.apache.log4j.{Level, Logger}
+import org.apache.spark.{SparkConf, SparkContext}
 
 /**
   * An example app for CART(Classification And Regression Trees) on a1a data set.
@@ -13,7 +13,7 @@ import org.apache.log4j.{Level, Logger}
   * If you use it as a template to create your own app, please use
   * `spark-submit` to submit your app.
   */
-object RunSparkCARTForClassification {
+object RunSparkCART {
 
   def main(args: Array[String]) {
     Logger.getLogger("org").setLevel(Level.WARN)
@@ -26,9 +26,6 @@ object RunSparkCARTForClassification {
     val min_info_gain: Double = 1e-6
     val max_bins: Int = 32
     val bin_samples: Int = 10000
-    val row_rate: Double = 1
-    val col_rate: Double = 1
-    val model_pt = output_dir + "cart.model"
 
     val conf = new SparkConf()
       .setMaster("local[4]")
@@ -50,16 +47,11 @@ object RunSparkCARTForClassification {
       max_bins,
       bin_samples,
       min_node_size,
-      min_info_gain,
-      row_rate,
-      col_rate)
+      min_info_gain)
 
     cart_model.printStructure()
 
     val preds = cart_model.predict(test)
-
-    println(s"cnt(0) = ${preds.filter(_._2 == 0.0).count()}")
-    println(s"cnt(1) = ${preds.filter(_._2 == 1.0).count()}")
 
     val err = preds.filter(r => r._1 != r._2).count().toDouble / test.count()
     println("Test Error = " + err)

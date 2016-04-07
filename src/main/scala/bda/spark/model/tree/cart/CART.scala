@@ -22,8 +22,6 @@ object CART {
     * @param bin_samples minimum number of samples used to find [[CARTSplit]] and [[CARTBin]], default is 10000
     * @param min_node_size minimum number of instances in leaves, default is 15
     * @param min_info_gain minimum infomation gain while splitting, default is 1e-6
-    * @param row_rate sample ratio of training data points
-    * @param col_rate sample ratio of features
     * @return an instance of [[CART]]
     */
   def train(train_data: RDD[LabeledPoint],
@@ -32,9 +30,7 @@ object CART {
             max_bins: Int = 32,
             bin_samples: Int = 10000,
             min_node_size: Int = 15,
-            min_info_gain: Double = 1e-6,
-            row_rate: Double = 1.0,
-            col_rate: Double = 1.0): CARTModel = {
+            min_info_gain: Double = 1e-6): CARTModel = {
 
     new CART(Impurities.fromString(impurity),
       max_depth,
@@ -42,8 +38,8 @@ object CART {
       bin_samples,
       min_node_size,
       min_info_gain,
-      row_rate,
-      col_rate).train(train_data)
+      row_rate = 1.0,
+      col_rate = 1.0).train(train_data)
   }
 
   /**

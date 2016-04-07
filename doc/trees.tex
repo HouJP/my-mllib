@@ -252,10 +252,10 @@
 \rfoot{~\thepage~}
 
 %%%%%%%%%% 论文标题、作者等 %%%%%%%%%%
-\title{Ensembles of Trees 算法与实现}
+\title{树算法~原理与实现}
 %\author{BDA小组\\                     % 作者
 %        中国科学院计算技术研究所}
-\date{January 12, 2015}                % 日期
+\date{04/04/2016~更新}                % 日期
 \maketitle                           % 生成标题
 % \tableofcontents                     % 插入目录
 % \thispagestyle{empty}                % 首页无页眉页脚
@@ -265,36 +265,47 @@
 
 
 %%%%%%%%%% section %%%%%%%%%%
-\section{Regression Trees}
+\section{Classification And Regression Trees}
 
 \subsection{算法基础}
 
-回归树(Regression Trees)是一种贪心算法：它将特征空间进行递归地划分，切割成若干块区域，当对预测集的样本点进行预测时，先根据样本特征判断该样本点位于哪块区域，然后用该区域内的训练样本点集的均值作为该样本点的预测集。如图~(\ref{fig:regression_trees_cut})所示。
+CART(Classification And Regression Trees)可以用作分类和回归，是一种贪心算法：它将特征空间进行递归地划分，切割成若干块区域，当对预测集的样本点进行预测时，先根据样本特征判断该样本点位于哪块区域，然后用该区域内的训练样本点集的众数(分类)或均值(回归)作为该样本点的预测值。如图~(\ref{fig:cart_cut})所示。
 
 \begin{figure}[htbp]
-\centering\includegraphics[width=3.5in]{img/regression_trees_cut.eps}
-\caption{回归树算法}\label{fig:regression_trees_cut}
+\centering\includegraphics[width=3.5in]{img/cart_cut.eps}
+\caption{CART算法}\label{fig:cart_cut}
 \end{figure}
 
 \subsubsection{构造过程}
 
-回归树的构造采用的是二分递归分割的方法，从根节点开始“生长”。在每个节点处(初始只有一个根节点)，选取某维特征的某个特征值作为分裂阈值，将当前节点所包含的样本集分成两个子样本集(根节点包含所有的训练样本)，形成两个子节点，再对子节点采用同样的方法继续分割，直到不满足分割条件为止。如图~(\ref{fig:regression_trees})所示。 \\
+CART模型的构造采用的是二分递归分割的方法，从根节点开始“生长”。在每个节点处(初始只有一个根节点)，选取某维特征的某个特征值作为分裂阈值，将当前节点所包含的样本集分成两个子样本集(根节点包含所有的训练样本)，形成两个子节点，再对子节点采用同样的方法继续分割，直到不满足分割条件为止。如图~(\ref{fig:regression_trees})所示。 \\
 
-因此，回归树是结构简单的二叉树。 
+因此，CART模型是一棵结构简单的二叉树。 
 
 \begin{figure}[htbp]
 \centering\includegraphics[width=3.5in]{img/regression_trees.eps}
-\caption{回归树构造过程}\label{fig:regression_trees}
+\caption{CART回归模型构造过程}\label{fig:regression_trees}
 \end{figure}
 
 \subsubsection{节点纯度}
 
 %在回归树构造的过程中，会根据一定的标准分裂节点。在本算法中，每个节点分裂所使用的特征及对应特征值的选取依据的是方差(Variance)
 
-在回归树的构造过程中，每次节点的分裂都会生成两个新的节点，我们使用节点上所对应的训练样本集合的方差(Variance)来衡量该节点的优劣程度(不纯度, Impurity)。方差越大，则对应节点越混乱，质量越差。节点$N$的方差的计算方法如公式~(\ref{eqt:variance})所示。
+在CART模型的构造过程中，每次节点的分类都会生成两个新的节点。对于分类和回归，我们使用不同的标准来衡量每个节点的优劣程度(不纯度，Impurity)。不纯度越大，则对应节点越混乱，质量越差。
+
+当CART用作分类的时候，我们使用每个节点所对应的训练样本集合的基尼不纯度(Gini Impurity)来衡量该节点的好坏。节点$N$的方差不纯度的计算方法如公式~(\ref{eqt:gini})所示。
 
 \begin{eqnarray}
-	\label{eqt:variance}
+  \label{eqt:gini}
+{I}_{g}(N)=\sum_{i=1}^{K}{f_{i}(1 - f_{i})}
+\end{eqnarray}
+
+其中，$K$表示训练样本中的标签总数，$f_{i}$表示该节点所对应的训练样本中第i个标签所占的比例。
+
+当CART用做回归的时候，我们使用每个节点所对应的训练样本集合的方差(Varicance)作为该节点的不纯度。节点$N$的方差不纯度的计算方法如公式~(\ref{eqt:variance})所示。
+
+\begin{eqnarray}
+  \label{eqt:variance}
 {I}_{v}(N)=\frac{1}{{\left|S \right|}^{2}}\sum_{i\in S}\sum_{j\in S}\frac{1}{2}(y_{i}-y_{j})^2
 \end{eqnarray}
 
@@ -303,24 +314,38 @@
 在实现的过程中，为了提高算法的效率，采用了公式~(\ref{eqt:variance})的另一种表示形式，如公式~(\ref{eqt:variance2})所示。
 
 \begin{eqnarray}
-	\label{eqt:variance2}
+  \label{eqt:variance2}
 {I}_{v}(N)=\frac{1}{\left | S \right |}\left ( \sum_{i\in S} {y_{i}}^2 - \frac{1}{\left | S \right |} \sum_{i \in S} {y_{i}}^2 \right )
 \end{eqnarray}
 
+
 \subsubsection{信息增益}
 
-每个节点在分裂的时候有多种分裂方式可供选择，最终选取何种分裂方式依据的是该分裂方式所带来的信息增益(Information Gain)。在回归树中，使用节点分裂的方差缩减量(Variance Reduction)来表示本次分裂的信息增益，方差缩减量越大，说明这次分裂的效果越好。该信息增益的计算方法如公式~(\ref{eqt:variance_reduction})所示。
+%% v2.0
+
+CART模型的每个节点在分裂时，需要确定分裂使用的特征及对应的特征值。我们使用信息增益(Information Gain)来评价分裂时选用不同特征及特征值的优劣程度，从而做出最佳选择。信息增益的计算方法如公式~(\ref{eqt:information_gain})所示。
 
 \begin{eqnarray}
-	\label{eqt:variance_reduction}
-IG_{v}(N) = I_{v}(N) - \left ( \frac{\left | S_{1}\right |}{\left | S \right |} I_{v}\left ( N_{1} \right ) + \frac{\left | S_{2}\right |}{\left | S \right |} I_{v}\left ( N_{2} \right )\right)
+  \label{eqt:information_gain}
+IG(N) = I(N) - \left ( \frac{\left | S_{1}\right |}{\left | S \right |} I\left ( N_{1} \right ) + \frac{\left | S_{2}\right |}{\left | S \right |} I\left ( N_{2} \right )\right)
 \end{eqnarray}
 
 其中，$N_{1}$、$N_{2}$表示分裂过程中由$N$新生成的两个子节点，$S$表示节点$N$所包含的训练样本集，$S_{1}$表示子节点$N_{1}$所包含的训练样本集，$S_{2}$表示子节点$N_{2}$所包含的训练样本集。
 
+%% v1.0 
+
+% 每个节点在分裂的时候有多种分裂方式可供选择，最终选取何种分裂方式依据的是该分裂方式所带来的信息增益(Information Gain)。在回归树中，使用节点分裂的方差缩减量(Variance Reduction)来表示本次分裂的信息增益，方差缩减量越大，说明这次分裂的效果越好。该信息增益的计算方法如公式~(\ref{eqt:variance_reduction})所示。
+
+% \begin{eqnarray}
+% 	\label{eqt:variance_reduction}
+% IG_{v}(N) = I_{v}(N) - \left ( \frac{\left | S_{1}\right |}{\left | S \right |} I_{v}\left ( N_{1} \right ) + \frac{\left | S_{2}\right |}{\left | S \right |} I_{v}\left ( N_{2} \right )\right)
+% \end{eqnarray}
+
+% 其中，$N_{1}$、$N_{2}$表示分裂过程中由$N$新生成的两个子节点，$S$表示节点$N$所包含的训练样本集，$S_{1}$表示子节点$N_{1}$所包含的训练样本集，$S_{2}$表示子节点$N_{2}$所包含的训练样本集。
+
 \subsubsection{终止条件}
 
-回归树的节点在遇到如下情况的时候终止分裂，形成叶子节点：
+CART算法中，节点在遇到如下情况的时候终止分裂，形成叶子节点：
 
 % \begin{enumerate}[(1)]
 \begin{itemize}
@@ -332,38 +357,100 @@ IG_{v}(N) = I_{v}(N) - \left ( \frac{\left | S_{1}\right |}{\left | S \right |} 
 
 \subsubsection{叶节点预测值}
 
-每个叶子节点对应一个预测值，该预测值的计算方法如公式~(\ref{eqt:leave_pred})所示。
+CART模型的每个叶子节点对应一个预测值，分类和回归采用不同的方法得到该预测值。 
+
+当CART算法用作分类时，叶节点预测值的计算方法如公式~(\ref{eqt:leave_pred_classification})所示。
 
 \begin{eqnarray}
-	\label{eqt:leave_pred}
+  \label{eqt:leave_pred_classification}
+P_{i} = arg~max_{k}\{c_{ik}\}, k = 1,K
+\end{eqnarray}
+
+其中，~$P_{i}$~表示第$i$个叶节点的分类预测值，~$c_{ik}$~表示第$i$个叶节点中label为k的训练样本个数。
+
+当CART算法用作回归时，叶节点预测值的计算方法如公式~(\ref{eqt:leave_pred_regression})所示。
+
+\begin{eqnarray}
+	\label{eqt:leave_pred_regression}
 P_{i} = \frac{1}{\left | S_{i} \right |} \sum_{j \in S_{i}} y_{ij}
 \end{eqnarray}
 
-其中，~$P_{i}$~表示第$i$个叶子节点的预测值，~$S_{i}$~表示第$i$个叶子节点上的训练样本集，~$y_{ij}$~表示第$i$个叶子节点所包含的训练样本集中的第$j$个样本点的$label$值。
+其中，~$P_{i}$~表示第$i$个叶子节点的回归预测值，~$S_{i}$~表示第$i$个叶子节点上的训练样本集，~$y_{ij}$~表示第$i$个叶子节点所包含的训练样本集中的第$j$个样本点的$label$值。
 
 \subsection{分布式实现}
 
 \subsubsection{特征值分箱}
 
-为了使模型能够适应大规模数据的需求，在为节点分裂选择合适的特征及阈值的过程中，算法没有遍历每个特征的所有特征值，而是先对训练样本采样，将采样的训练样本中每个特征的特征值尽可能均匀的分箱(箱中的训练样本个数尽可能相等)，使用箱与箱之间的边界值作为候选该特征的候选分裂值。如图~(\ref{fig:feature_bins})所示。
+为了使模型能够适应大规模数据的需求，在为节点分裂选择合适的特征及阈值的过程中，算法没有遍历每个特征的所有特征值，而是先对训练样本采样，将采样的训练样本中每个特征的特征值尽可能均匀的分箱(等频分箱，箱中的训练样本个数尽可能相等)，使用箱与箱之间的边界值作为候选该特征的候选分裂值。如图~(\ref{fig:feature_bins})~所示。
 
 \begin{figure}[htbp]
 \centering\includegraphics[width=3.5in]{img/feature_bins.eps}
 \caption{特征值分箱}\label{fig:feature_bins}
 \end{figure}
 
-\subsubsection{最优分裂方式选择}
+\subsubsection{节点分裂}
 
-在回归树的分布式实现中，训练数据集存储在集群的不同机器节点上。为了给每个节点选择一个最优的分裂方式(分裂使用的特征及分裂阈值)，集群的每个机器节点为每个待分裂节点维护三个统计量：该机器节点上的训练集分区中属于该待分裂节点的样本个数($count$)、样本$label$之和($sum$)以及样本$label$的平方和($squared\_sum$)。最后，将各机器节点维护的统计量收集到Driver所在的机器节点，在该机器节点上依据这些统计量完成最优分裂方式的选择。如图~(\ref{fig:best_split})所示。
+在算法的分布式实现中，每次会生成新的一层节点作为待分裂节点(Splitting Nodes)，这些待分裂节点的最佳分裂特征及分裂阈值的选择并行完成。如图~(\ref{fig:new_splitting_nodes})~所示。
 
 \begin{figure}[htbp]
-\centering\includegraphics[width=3.5in]{img/best_split.eps}
-\caption{最优分裂方式选择}\label{fig:best_split}
+\centering\includegraphics[width=3.5in]{img/new_splitting_nodes.eps}
+\caption{CART模型构建过程}\label{fig:new_splitting_nodes}
 \end{figure}
+
+在Spark中，训练数据集以RDD的形式存储，并被切分为不同的分区(Partition)。为了确定每个待分裂节点的最佳分裂特征及分裂阈值，为每个待分裂节点在各个训练数据集分区分配一个状态累加器(ImpurityAggregator)，用以统计位于该分区的训练样本集对不同分裂节点的影响。统计完成后，同一待分裂节点位于不同分区的状态累加器进行合并(Merge)，得到一个用于描述该分裂节点总体状态的累加器。根据每个待分裂节点的最终状态累加器，确定最佳分裂特征及对应的阈值，从而实现并行化。如图~(\ref{fig:aggregator})~所示。
+
+\begin{figure}[htbp]
+\centering\includegraphics[width=3.5in]{img/aggregator.eps}
+\caption{待分裂节点状态统计}\label{fig:aggregator}
+\end{figure}
+
+
+当CART用作分类的时候，状态累加器中记录各维特征各个分箱中所包含的训练样本个数(count)以及各label数目(count for label\#i)。
+
+当CART用作回归的时候，状态累加器中记录各维特征各个分箱中所包含的训练样本个数(count)、label之和(sum)以及label的平方和(squared sum)。
+
+% 在回归树的分布式实现中，训练数据集存储在集群的不同机器节点上。为了给每个节点选择一个最优的分裂方式(分裂使用的特征及分裂阈值)，集群的每个机器节点为每个待分裂节点维护三个统计量：该机器节点上的训练集分区中属于该待分裂节点的样本个数($count$)、样本$label$之和($sum$)以及样本$label$的平方和($squared\_sum$)。最后，将各机器节点维护的统计量收集到Driver所在的机器节点，在该机器节点上依据这些统计量完成最优分裂方式的选择。如图~(\ref{fig:best_split})所示。
+
+% \begin{figure}[htbp]
+% \centering\includegraphics[width=3.5in]{img/best_split.eps}
+% \caption{最优分裂方式选择}\label{fig:best_split}
+% \end{figure}
 
 \subsection{使用示例}
 
-\begin{lstlisting}[language={SCALA},title={RunDecisionTreeDemo.scala}]  
+\subsubsection{分类}
+
+\begin{lstlisting}[language={SCALA},title={RunCARTForClassificationDemo.scala}]  
+// read training data and testing data from disk
+val train = Points.readLibSVMFile(sc, data_dir + "a1a")
+val test = Points.readLibSVMFile(sc, data_dir + "a1a.t")
+
+train.cache()
+test.cache()
+
+// train a model of CART for classification
+val cart_model = CART.train(
+  train,
+  impurity = "Gini",
+  max_depth = 10,
+  max_bins = 32,
+  bin_samples = 10000,
+  min_node_size = 15,
+  min_info_gain = 1e-6)
+
+// show struct of CART model
+cart_model.printStructure()
+
+// preict for testing data use the model
+val preds = cart_model.predict(test)
+// calculate testing error
+val err = preds.filter(r => r._1 != r._2).count().toDouble / test.count()
+println("Test Error = " + err)
+\end{lstlisting}  
+
+\subsubsection{回归}
+
+\begin{lstlisting}[language={SCALA},title={RunCARTForRegressionDemo.scala}]  
 // read training data and testing data from disk
 val train = Points.readLibSVMFile(sc, data_dir + "cadata.train")
 val test = Points.readLibSVMFile(sc, data_dir + "cadata.test")
@@ -371,30 +458,26 @@ val test = Points.readLibSVMFile(sc, data_dir + "cadata.test")
 train.cache()
 test.cache()
 
-// train a model of decision tree
-val model: DecisionTreeModel = DecisionTree.train(
-  train_data = train,
-  valid_data = null,
-  impurity = "Variance",
-  loss = "SquaredLoss",
-  max_depth = 10,
-  max_bins = 32,
-  bin_samples = 10000,
-  min_node_size = 15,
-  min_info_gain = 1e-6,
-  row_rate = 1.0,
-  col_rate = 1.0,
-  silent = false)
+// train a model of CART for regression
+val cart_model = CART.train(
+  train,
+  impurity,
+  max_depth,
+  max_bins,
+  bin_samples,
+  min_node_size,
+  min_info_gain)
 
-// predict for testing data use the model
-val predictions = model.predict(test).zip(test).map {
-  case (y, pn) => s"$y\t$pn"
+// show struct of CART model
+cart_model.printStructure()
+
+// preict for testing data use the model
+val preds = test.map {
+  p =>
+    (p.label, cart_model.predict(p.fs))
 }
-// save predictions on disk
-predictions.saveAsTextFile(prediction_pt)
-
-// save the model on disk
-model.save(sc, model_pt)
+// calculate testing error
+println(s"Test RMSE: ${RMSE(preds)}")
 \end{lstlisting}  
 
 \section{GBRT}

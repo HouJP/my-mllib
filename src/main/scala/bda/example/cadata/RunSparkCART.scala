@@ -14,7 +14,7 @@ import bda.spark.evaluate.Regression.RMSE
   * If you use it as a template to create your own app, please use
   * `spark-submit` to submit your app.
   */
-object RunSparkCARTForRegression {
+object RunSparkCART {
 
   def main(args: Array[String]) {
     Logger.getLogger("org").setLevel(Level.WARN)
@@ -27,9 +27,6 @@ object RunSparkCARTForRegression {
     val min_info_gain: Double = 1e-6
     val max_bins: Int = 32
     val bin_samples: Int = 10000
-    val row_rate: Double = 1
-    val col_rate: Double = 1
-    val model_pt = output_dir + "cart.model"
 
     val conf = new SparkConf()
       .setMaster("local[4]")
@@ -51,9 +48,7 @@ object RunSparkCARTForRegression {
       max_bins,
       bin_samples,
       min_node_size,
-      min_info_gain,
-      row_rate,
-      col_rate)
+      min_info_gain)
 
     cart_model.printStructure()
 

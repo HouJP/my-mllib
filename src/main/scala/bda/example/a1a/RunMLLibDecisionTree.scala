@@ -1,10 +1,9 @@
 package bda.example.a1a
 
 import bda.example._
-import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.mllib.tree.DecisionTree
-import org.apache.spark.mllib.tree.model.DecisionTreeModel
 import org.apache.spark.mllib.util.MLUtils
+import org.apache.spark.{SparkConf, SparkContext}
 
 object RunMLLibDecisionTree {
 

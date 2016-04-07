@@ -18,6 +18,7 @@ out
 doc/*
 !doc/img/
 !doc/trees.tex
+!doc/trees.pdf
 
 .*
 .gitignore
