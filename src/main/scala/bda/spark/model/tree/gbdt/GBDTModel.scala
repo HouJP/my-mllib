@@ -1,45 +1,45 @@
-package bda.spark.model.tree.cart
+package bda.spark.model.tree.gbdt
 
 import bda.common.linalg.immutable.SparseVector
 import bda.common.obj.LabeledPoint
-import bda.spark.model.tree.cart.impurity.Impurity
+import bda.spark.model.tree.gbdt.impurity.Impurity
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
 /**
-  * Model of CART(Classification And Regression Trees).
+  * Model of GBDT(Gradient Boosting Decision Trees).
   *
-  * @param root          root node of CART structure
-  * @param n_fs          number of features
-  * @param impurity      an instance of [[Impurity]]
+  * @param impurity      impurity used to split node of model
   * @param max_depth     maximum depth of CART
   * @param max_bins      maximum number of bins
   * @param bin_samples   minimum number of samples used in finding splits and bins
   * @param min_node_size minimum number of data point instances in leaves
   * @param min_info_gain minimum information gain while splitting
-  * @param row_rate      sampling ratio of training data set
-  * @param col_rate      sampling ratio of features
+  * @param num_round     number of rounds
+  * @param num_label     number of different labels
+  * @param wk_learners   weak learners of GBDT model
   */
-class CARTModel(root: CARTNode,
-                n_fs: Int,
-                impurity: Impurity,
+class GBDTModel(impurity: Impurity,
                 max_depth: Int,
                 max_bins: Int,
                 bin_samples: Int,
                 min_node_size: Int,
                 min_info_gain: Double,
-                row_rate: Double,
-                col_rate: Double) extends Serializable {
+                num_round: Int,
+                num_label: Int,
+                wk_learners: Array[CARTNode]) {
 
   /**
-    * Predict values for the given data using the model trained.
+    * Method to predict value for given data point using the model trained.
     *
     * @param input test data set which represented as a RDD of [[LabeledPoint]]
     * @return a RDD stored predictions.
     */
   def predict(input: RDD[LabeledPoint]): RDD[(Double, Double)] = {
-    val root = this.root
-    input.map(lp => (lp.label, CARTModel.predict(lp.fs, root)))
+    val wk_learners = this.wk_learners
+    val num_label = this.num_label
+
+    input.map(lp => (lp.label, GBDTModel.predict(lp.fs, wk_learners, num_label)))
   }
 
   /**
@@ -49,11 +49,11 @@ class CARTModel(root: CARTNode,
     * @return the prediction for specified data point
     */
   def predict(p: SparseVector[Double]): Double = {
-    CARTModel.predict(p, root)
+    GBDTModel.predict(p, wk_learners, num_label)
   }
 
   /**
-    * Method to store model of CART on disk.
+    * Method to store model of GBDT on disk.
     *
     * @param sc an instance of [[SparkContext]]
     * @param pt path of the model location on disk
@@ -62,28 +62,41 @@ class CARTModel(root: CARTNode,
     val model_rdd = sc.makeRDD(Seq(this))
     model_rdd.saveAsObjectFile(pt)
   }
-
-  /**
-    * Method to print structure of CART model.
-    */
-  def printStructure() = {
-    CARTModel.printStructure(this.root)
-  }
 }
 
 /**
-  * Static methods for [[CARTModel]].
+  * Static methods for [[GBDTModel]].
   */
-object CARTModel {
+private[gbdt] object GBDTModel {
 
   /**
     * Method to predict value for single data point using the model trained.
     *
-    * @param fs feature vector of single data point
+    * @param fs      feature vector of single data point
+    * @param n_label number of different labels
+    * @return the prediction for specified data point
+    */
+  def predict(fs: SparseVector[Double],
+              wk_learners: Array[CARTNode],
+              n_label: Int): Double = {
+    val preds = Array.fill[Double](n_label)(0.0)
+
+    wk_learners.indices.foreach {
+      id =>
+        preds(id % n_label) += GBDTModel.predict(fs, wk_learners(id))
+    }
+
+    preds.zipWithIndex.maxBy(_._1)._2
+  }
+
+  /**
+    * Method to predict value for single data point using the model trained.
+    *
+    * @param fs   feature vector of single data point
     * @param root root of CART model
     * @return the prediction for specified data point
     */
-  private[cart] def predict(fs: SparseVector[Double], root: CARTNode): Double = {
+  def predict(fs: SparseVector[Double], root: CARTNode): Double = {
     var node = root
     while (!node.is_leaf) {
       if (fs(node.split.get.id_f) < node.split.get.threshold) {
@@ -93,26 +106,5 @@ object CARTModel {
       }
     }
     node.predict
-  }
-
-  /**
-    * Method to print structure of CART model.
-    *
-    * @param root root of CART model
-    */
-  def printStructure(root: CARTNode): Unit = {
-    val prefix = Array.fill[String](root.depth)("|---").mkString("")
-    println(s"$prefix$root")
-
-    root.left_child match {
-      case Some(l_child: CARTNode) =>
-        printStructure(l_child)
-      case None => // RETURN
-    }
-    root.right_child match {
-      case Some(r_child: CARTNode) =>
-        printStructure(r_child)
-      case None => // RETURN
-    }
   }
 }

@@ -1,22 +1,21 @@
-package bda.spark.model.tree.cart
+package bda.spark.model.tree.gbdt
 
-import bda.common.util.Sampler
 import bda.spark.model.tree.{NodeBestSplit, FeatureSplit}
 
 /**
   * Class of nodes which form a CART model.
   *
-  * @param id ID of the node, 1-based
-  * @param depth depth of the node in a CART model, 0-based
-  * @param n_fs number of features
-  * @param col_rate sampling ratio of features
+  * @param id       ID of the node, 1-based
+  * @param id_label ID of the label, 0-based
+  * @param depth    depth of the node in a CART model, 0-based
+  * @param n_fs     number of features
   * @param impurity impurity value of the node
-  * @param predict prediction value of the node
+  * @param predict  prediction value of the node
   */
-private[cart] class CARTNode (val id: Int,
+private[gbdt] class CARTNode (val id: Int,
+                              val id_label: Int,
                               val depth: Int,
                               val n_fs: Int,
-                              val col_rate: Double,
                               val impurity: Double,
                               val predict: Double) extends Serializable {
 
@@ -28,8 +27,6 @@ private[cart] class CARTNode (val id: Int,
   var left_child: Option[CARTNode] = None
   /** right child */
   var right_child: Option[CARTNode] = None
-  /** sub features */
-  val sub_fs = Sampler.subSample(n_fs, col_rate)
 
   /**
     * Method to convert the node into a [[String]].
@@ -37,8 +34,8 @@ private[cart] class CARTNode (val id: Int,
     * @return a instance of [[String]] represented the node
     */
   override def toString = {
-    s"id($id), depth($depth), impurity($impurity), predict($predict), " +
-      s"split(${split.getOrElse("NoSplit")})"//, sub_fs(${sub_fs.mkString(",")})"
+    s"id($id), id_label($id_label), depth($depth), impurity($impurity), predict($predict), " +
+      s"split(${split.getOrElse("NoSplit")})"
   }
 
   /**
@@ -68,15 +65,15 @@ private[cart] class CARTNode (val id: Int,
       is_leaf = false
       split = Some(best_split.split)
       left_child = Some(new CARTNode(id << 1,
+        id_label,
         depth + 1,
         n_fs,
-        col_rate,
         best_split.l_impurity,
         best_split.l_predict))
       right_child = Some(new CARTNode((id << 1) + 1,
+        id_label,
         depth + 1,
         n_fs,
-        col_rate,
         best_split.r_impurity,
         best_split.r_predict))
     }

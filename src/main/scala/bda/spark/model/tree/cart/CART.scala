@@ -2,6 +2,7 @@ package bda.spark.model.tree.cart
 
 import bda.common.obj.LabeledPoint
 import bda.common.Logging
+import bda.spark.model.tree.{NodeBestSplit, FeatureSplit, FeatureBin}
 import bda.spark.model.tree.cart.impurity.{ImpurityAggregator, Impurity, Impurities}
 import org.apache.spark.rdd.RDD
 
@@ -15,11 +16,11 @@ object CART {
   /**
     * An adapter for training a CART model.
     *
-    * @param train_data training data points
-    * @param impurity impurity type with [[String]], default is "Variance"
-    * @param max_depth maximum depth of the CART default is 10
-    * @param max_bins maximum number of bins, default is 32
-    * @param bin_samples minimum number of samples used to find [[CARTSplit]] and [[CARTBin]], default is 10000
+    * @param train_data    training data set
+    * @param impurity      impurity type with [[String]], default is "Variance"
+    * @param max_depth     maximum depth of the CART default is 10
+    * @param max_bins      maximum number of bins, default is 32
+    * @param bin_samples   minimum number of samples used to find [[bda.spark.model.tree.FeatureSplit]] and [[bda.spark.model.tree.FeatureBin]], default is 10000
     * @param min_node_size minimum number of instances in leaves, default is 15
     * @param min_info_gain minimum infomation gain while splitting, default is 1e-6
     * @return an instance of [[CART]]
@@ -45,12 +46,12 @@ object CART {
   /**
     * Method to find ID of splitting node which contains specified data point.
     *
-    * @param p specified data point
+    * @param p    specified data point
     * @param root root of the CART
-    * @param bins a two dimension array stored bins of all features
-    * @return ID of splitting node which contains specified data point
+    * @param bins a two-dimension array stored bins of all features
+    * @return     ID of splitting node which contains specified data point
     */
-  def findLeafID(p: CARTPoint, root: CARTNode, bins: Array[Array[CARTBin]]): Int = {
+  def findLeafID(p: CARTPoint, root: CARTNode, bins: Array[Array[FeatureBin]]): Int = {
     var leaf = root
     while (!leaf.is_leaf) {
       val split = leaf.split.get
@@ -67,7 +68,7 @@ object CART {
   /**
     * Push the child into the queue as a new splitting node if isn't [[None]].
     *
-    * @param que queue stored splitting nodes
+    * @param que  queue stored splitting nodes
     * @param node left or right child of the splitting node
     */
   def inQueue(que :mutable.Queue[CARTNode], node: Option[CARTNode]): Unit = {
@@ -79,16 +80,16 @@ object CART {
 }
 
 /**
-  * Class of CART(Classification And Regression Trees)
+  * Class of CART(Classification And Regression Trees).
   *
-  * @param impurity an instance of [[Impurity]]
-  * @param max_depth maximum depth of CART
-  * @param max_bins maximum number of bins
-  * @param bin_samples minimum number of samples used to find [[CARTSplit]] and [[CARTBin]]
+  * @param impurity      an instance of [[Impurity]]
+  * @param max_depth     maximum depth of CART
+  * @param max_bins      maximum number of bins
+  * @param bin_samples   minimum number of samples used to find [[bda.spark.model.tree.FeatureSplit]] and [[FeatureBin]]
   * @param min_node_size minimum number of instances in leaves
   * @param min_info_gain minimum information gain while splitting
-  * @param row_rate sample ratio of training data set
-  * @param col_rate sample ratio of features
+  * @param row_rate      sample ratio of training data set
+  * @param col_rate      sample ratio of features
   */
 class CART(impurity: Impurity,
            max_depth: Int,
@@ -100,10 +101,10 @@ class CART(impurity: Impurity,
            col_rate: Double) extends Logging {
 
   /**
-    * Method to train a CART model over training data set.
+    * Method to train a CART model based on training data set.
     *
     * @param train_data training data set represented as a RDD of [[LabeledPoint]]
-    * @return an instance of [[CARTModel]]
+    * @return           an instance of [[CARTModel]]
     */
   def train(train_data: RDD[LabeledPoint]): CARTModel = {
     val impurity = this.impurity
@@ -111,6 +112,7 @@ class CART(impurity: Impurity,
     val n_fs = train_data.map(_.fs.maxActiveIndex).max + 1
     val n_sub_fs = (n_fs * col_rate).ceil.toInt
     val n_bins = Array.fill(n_fs)(max_bins)
+
     // Find splits and bins for each feature
     val (splits, bins) = findSplitsBins(train_data, n_train, n_fs, n_bins)
 
@@ -173,20 +175,20 @@ class CART(impurity: Impurity,
   /**
     * Method to find best splits for splitting nodes.
     *
-    * @param agg_leaves impurity aggregator for splitting nodes
-    * @param n_bins number of bins for all features
-    * @param n_sub_fs number of sub features
-    * @param leaves an array stored leaves
-    * @param bins bins of all features
-    * @param impurity an instance of [[Impurity]]
-    * @return (position-id, [[CARTBestSplit]])
+    * @param agg_leaves   impurity aggregator for splitting nodes
+    * @param n_bins       number of bins for all features
+    * @param n_sub_fs     number of sub features
+    * @param leaves       an array stored leaves
+    * @param bins         bins of all features
+    * @param impurity     an instance of [[Impurity]]
+    * @return             (position-id, [[FeatureSplit]])
     */
   def findBestSplits(agg_leaves: RDD[(Int, ImpurityAggregator)],
                      n_bins: Array[Int],
                      n_sub_fs: Int,
                      leaves: Array[CARTNode],
-                     bins: Array[Array[CARTBin]],
-                     impurity: Impurity): Map[Int, CARTBestSplit] = {
+                     bins: Array[Array[FeatureBin]],
+                     impurity: Impurity): Map[Int, NodeBestSplit] = {
     agg_leaves.map {
       case (pos, agg) =>
         agg.toPrefixSum
@@ -202,7 +204,7 @@ class CART(impurity: Impurity,
 
                 val weighted_impurity = impurity.calculate_weighted(l_count, r_count, l_impurity, r_impurity)
 
-                CARTBestSplit(weighted_impurity,
+                new NodeBestSplit(weighted_impurity,
                   l_impurity,
                   r_impurity,
                   l_predict,
@@ -220,8 +222,8 @@ class CART(impurity: Impurity,
   /**
     * Method to collect splitting nodes.
     *
-    * @param node_que a queue stored all splitting nodes
-    * @return an array of [[CARTNode]] which will split next time
+    * @param node_que   a queue stored all splitting nodes
+    * @return           an array of [[CARTNode]] which will split next time
     */
   def findCARTNodesToSplit(node_que: mutable.Queue[CARTNode]): Array[CARTNode] = {
     val nodes_builder = mutable.ArrayBuilder.make[CARTNode]
@@ -234,24 +236,24 @@ class CART(impurity: Impurity,
   /**
     * Method to find splits and bins for features.
     *
-    * @param train_data training data set represented as a RDD of [[LabeledPoint]]
-    * @param n_train size of training data set
-    * @param n_fs number of features
-    * @param n_bins number of bins for features
-    * @return (Array(Array([[CARTSplit]]), Array(Array([[CARTBin]])))
+    * @param train_data   training data set represented as a RDD of [[LabeledPoint]]
+    * @param n_train      size of training data set
+    * @param n_fs         number of features
+    * @param n_bins       number of bins for features
+    * @return             (Array(Array([[FeatureSplit]]), Array(Array([[FeatureBin]])))
     */
   def findSplitsBins(train_data: RDD[LabeledPoint],
                      n_train: Int,
                      n_fs: Int,
-                     n_bins: Array[Int]): (Array[Array[CARTSplit]], Array[Array[CARTBin]]) = {
+                     n_bins: Array[Int]): (Array[Array[FeatureSplit]], Array[Array[FeatureBin]]) = {
 
     // Sample the input data to generate splits and bins
     val n_samples = math.max(max_bins * max_bins, bin_samples)
     val r_samples = math.min(n_samples, n_train).toDouble / n_train.toDouble
     val sampled_data = train_data.sample(withReplacement = false, fraction = r_samples).collect()
 
-    val splits = new Array[Array[CARTSplit]](n_fs)
-    val bins = new Array[Array[CARTBin]](n_fs)
+    val splits = new Array[Array[FeatureSplit]](n_fs)
+    val bins = new Array[Array[FeatureBin]](n_fs)
 
     Range(0, n_fs).foreach {
       id_f =>
@@ -262,24 +264,24 @@ class CART(impurity: Impurity,
         val n_bin = n_split + 1
         n_bins(id_f) = n_bin
 
-        splits(id_f) = new Array[CARTSplit](n_split)
-        bins(id_f) = new Array[CARTBin](n_bin)
+        splits(id_f) = new Array[FeatureSplit](n_split)
+        bins(id_f) = new Array[FeatureBin](n_bin)
 
         // Generate splits
         Range(0, n_split).foreach {
           id_split =>
-            splits(id_f)(id_split) = new CARTSplit(id_f, split_vs(id_split))
+            splits(id_f)(id_split) = new FeatureSplit(id_f, split_vs(id_split))
         }
         // Generate bins
         if (n_bin == 1) {
-          bins(id_f)(0) = new CARTBin(CARTSplit.lowest(id_f), CARTSplit.highest(id_f))
+          bins(id_f)(0) = new FeatureBin(FeatureSplit.lowest(id_f), FeatureSplit.highest(id_f))
         } else {
-          bins(id_f)(0) = new CARTBin(CARTSplit.lowest(id_f), splits(id_f).head)
+          bins(id_f)(0) = new FeatureBin(FeatureSplit.lowest(id_f), splits(id_f).head)
           Range(1, n_split).foreach {
             id_bin =>
-              bins(id_f)(id_bin) = new CARTBin(splits(id_f)(id_bin - 1), splits(id_f)(id_bin))
+              bins(id_f)(id_bin) = new FeatureBin(splits(id_f)(id_bin - 1), splits(id_f)(id_bin))
           }
-          bins(id_f)(n_split) = new CARTBin(splits(id_f).last, CARTSplit.highest(id_f))
+          bins(id_f)(n_split) = new FeatureBin(splits(id_f).last, FeatureSplit.highest(id_f))
         }
     }
 
@@ -289,10 +291,10 @@ class CART(impurity: Impurity,
   /**
     * Method to find splits for specified feature with sampled training data set.
     *
-    * @param sampled_f sampled value of specified feature
-    * @param id_f ID of specified feature, indexed from 0
-    * @param n_bins nube of bins for all features
-    * @return an array stored values of splits for specified feature
+    * @param sampled_f  sampled value of specified feature
+    * @param id_f       ID of specified feature, indexed from 0
+    * @param n_bins     number of bins for all features
+    * @return           an array stored values of splits for specified feature
     */
   def findSplitVS(sampled_f: Array[Double],
                   id_f: Int,

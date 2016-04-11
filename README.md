@@ -16,13 +16,15 @@
 
 ###<a name="intro">Project Introduction</a>
 
+
 The project implemented some machine learning algorithms on spark which is written in scala and it also included standalone implementations of these algorithms.
 
 You can find these ML algorithms up to now:
 
-*	Classification And Regression Trees
-*	Gradient Boosting Decision Trees
-*	Random Forest
+*	Classification And Regression Trees （used for classification and regression）
+*	Gradient Boosting Decision Trees (used for multiple classification)
+*	Gradient Boosting Regression Trees (used for regression)
+*	Random Forest (used for regression)
 
 ****
 
@@ -101,6 +103,9 @@ TODO
 ****
 
 ###<a name="version">Version Updating</a>
+
+*	04/11/2016
+	*	finished GBDT(Gradient Boosting Decision Trees) on Spark, used for multiple classification.
 
 *	03/09/2016
 	*	finished CART(Classification And Regression Trees), used gini for classification and variance for regression.

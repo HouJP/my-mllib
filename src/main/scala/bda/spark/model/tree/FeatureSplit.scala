@@ -1,4 +1,4 @@
-package bda.spark.model.tree.cart
+package bda.spark.model.tree
 
 /**
   * Class of split which stored information of splitting.
@@ -6,7 +6,7 @@ package bda.spark.model.tree.cart
   * @param id_f ID of specified feature
   * @param threshold threshold used to split. Split left if feature-value < threshold, else right
   */
-private[cart] class CARTSplit(val id_f: Int,
+private[tree] class FeatureSplit(val id_f: Int,
                               val threshold: Double) extends Serializable {
 
   /**
@@ -20,27 +20,27 @@ private[cart] class CARTSplit(val id_f: Int,
 }
 
 /**
-  * Static methods of [[CARTSplit]].
+  * Static methods of [[FeatureSplit]].
   */
-private[cart] object CARTSplit {
+private[tree] object FeatureSplit {
 
   /**
-    * Method to generate lowest [[CARTSplit]] for specified feature.
+    * Method to generate lowest [[FeatureSplit]] for specified feature.
     *
     * @param id_f ID of specified feature
-    * @return an instance of [[CARTSplit]] which represents lowest split
+    * @return an instance of [[FeatureSplit]] which represents lowest split
     */
-  def lowest(id_f: Int): CARTSplit = {
-    new CARTSplit(id_f, Double.MinValue)
+  def lowest(id_f: Int): FeatureSplit = {
+    new FeatureSplit(id_f, Double.MinValue)
   }
 
   /**
-    * Method to generate highest [[CARTSplit]] for specified feature.
+    * Method to generate highest [[FeatureSplit]] for specified feature.
     *
     * @param id_f ID of specified feature
-    * @return an instance of [[CARTSplit]] which represents highest split
+    * @return an instance of [[FeatureSplit]] which represents highest split
     */
-  def highest(id_f: Int): CARTSplit = {
-    new CARTSplit(id_f, Double.MaxValue)
+  def highest(id_f: Int): FeatureSplit = {
+    new FeatureSplit(id_f, Double.MaxValue)
   }
 }
