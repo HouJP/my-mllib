@@ -21,7 +21,7 @@ object RunSparkGBDT {
 
     val conf = new SparkConf()
       .setMaster("local[4]")
-      .setAppName(s"Spark CART Training of dna dataset")
+      .setAppName(s"Spark GBDT Training of dna dataset")
       .set("spark.hadoop.validateOutputSpecs", "false")
     val sc = new SparkContext(conf)
 

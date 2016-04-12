@@ -2,6 +2,7 @@ package bda.spark.model.tree.cart
 
 import bda.common.linalg.immutable.SparseVector
 import bda.common.obj.LabeledPoint
+import bda.spark.model.tree.TreeNode
 import bda.spark.model.tree.cart.impurity.Impurity
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
@@ -20,16 +21,16 @@ import org.apache.spark.rdd.RDD
   * @param row_rate      sampling ratio of training data set
   * @param col_rate      sampling ratio of features
   */
-class CARTModel(root: CARTNode,
-                n_fs: Int,
-                impurity: Impurity,
-                max_depth: Int,
-                max_bins: Int,
-                bin_samples: Int,
-                min_node_size: Int,
-                min_info_gain: Double,
-                row_rate: Double,
-                col_rate: Double) extends Serializable {
+class CARTModel(val root: TreeNode,
+                val n_fs: Int,
+                val impurity: Impurity,
+                val max_depth: Int,
+                val max_bins: Int,
+                val bin_samples: Int,
+                val min_node_size: Int,
+                val min_info_gain: Double,
+                val row_rate: Double,
+                val col_rate: Double) extends Serializable {
 
   /**
     * Predict values for the given data using the model trained.
@@ -83,7 +84,7 @@ object CARTModel {
     * @param root root of CART model
     * @return the prediction for specified data point
     */
-  private[cart] def predict(fs: SparseVector[Double], root: CARTNode): Double = {
+  private[tree] def predict(fs: SparseVector[Double], root: TreeNode): Double = {
     var node = root
     while (!node.is_leaf) {
       if (fs(node.split.get.id_f) < node.split.get.threshold) {
@@ -100,17 +101,17 @@ object CARTModel {
     *
     * @param root root of CART model
     */
-  def printStructure(root: CARTNode): Unit = {
+  def printStructure(root: TreeNode): Unit = {
     val prefix = Array.fill[String](root.depth)("|---").mkString("")
     println(s"$prefix$root")
 
     root.left_child match {
-      case Some(l_child: CARTNode) =>
+      case Some(l_child: TreeNode) =>
         printStructure(l_child)
       case None => // RETURN
     }
     root.right_child match {
-      case Some(r_child: CARTNode) =>
+      case Some(r_child: TreeNode) =>
         printStructure(r_child)
       case None => // RETURN
     }

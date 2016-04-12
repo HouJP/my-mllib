@@ -47,7 +47,7 @@ private[cart] class VarianceAggregator(off_fs: Array[Int],
     * Method to calculate Variance impurity, prediction and labels count for left child.
     *
     * @param id_f ID of the feature specified, indexed from 0
-    * @param id_s ID of the [[bda.spark.model.tree.cart.CARTSplit]] specified, indexed from 0
+    * @param id_s ID of the [[bda.spark.model.tree.FeatureSplit]] specified, indexed from 0
     * @return (impurity, prediction, labels count) of left child
     */
   def calLeftInfo(id_f: Int, id_s: Int): (Double, Double, Double) = {
@@ -65,7 +65,7 @@ private[cart] class VarianceAggregator(off_fs: Array[Int],
     * Method to calculate Gini impurity, prediction and labels count for right child.
     *
     * @param id_f ID of the feature specified, indexed from 0
-    * @param id_s ID of the [[bda.spark.model.tree.cart.CARTSplit]] specified, indexed from 0
+    * @param id_s ID of the [[bda.spark.model.tree.FeatureSplit]] specified, indexed from 0
     * @return (impurity, prediction, labels count) of right child
     */
   def calRightInfo(id_f: Int, id_s: Int): (Double, Double, Double) = {

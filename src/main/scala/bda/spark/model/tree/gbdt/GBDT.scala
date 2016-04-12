@@ -1,7 +1,7 @@
 package bda.spark.model.tree.gbdt
 
 import bda.common.obj.LabeledPoint
-import bda.spark.model.tree.{NodeBestSplit, FeatureBin, FeatureSplit}
+import bda.spark.model.tree.{TreeNode, NodeBestSplit, FeatureBin, FeatureSplit}
 import bda.spark.model.tree.gbdt.impurity.{ImpurityAggregator, Impurities, Impurity}
 import org.apache.spark.rdd.RDD
 
@@ -16,14 +16,14 @@ object GBDT {
     * An adapter for training a GBDT model.
     *
     * @param train_data     training data set
-    * @param impurity       impurity type with [[String]], default is "Variance"
+    * @param impurity       impurity used to split node, default is "Variance"
     * @param max_depth      maximum depth of the CART default is 10
     * @param max_bins       maximum number of bins, default is 32
     * @param bin_samples    minimum number of samples used to find [[bda.spark.model.tree.FeatureSplit]] and [[bda.spark.model.tree.FeatureBin]], default is 10000
     * @param min_node_size  minimum number of instances in leaves, default is 15
     * @param min_info_gain  minimum infomation gain while splitting, default is 1e-6
     * @param num_round      number of rounds for GBDT
-    * @return
+    * @return an instance of [[GBDTModel]]
     */
   def train(train_data: RDD[LabeledPoint],
             impurity: String = "Variance",
@@ -34,7 +34,7 @@ object GBDT {
             min_info_gain: Double = 1e-6,
             num_round: Int = 10): GBDTModel = {
 
-    new GBDT(Impurities.fromString(impurity),
+    new GBDT(impurity,
       max_depth,
       max_bins,
       bin_samples,
@@ -51,7 +51,7 @@ object GBDT {
     * @param bins a two dimension array stored bins of all features
     * @return ID of splitting node which contains specified data point
     */
-  def findLeafID(p: CARTPoint, roots: Seq[CARTNode], bins: Array[Array[FeatureBin]]): Seq[(Int, Int)] = {
+  def findLeafID(p: CARTPoint, roots: Seq[TreeNode], bins: Array[Array[FeatureBin]]): Seq[(Int, Int)] = {
     roots.map {
       root =>
         findLeafID(p, root, bins)
@@ -66,7 +66,7 @@ object GBDT {
     * @param bins a two dimension array stored bins of all features
     * @return (node-ID, label-ID) of splitting node which contains specified data point
     */
-  def findLeafID(p: CARTPoint, root: CARTNode, bins: Array[Array[FeatureBin]]): (Int, Int) = {
+  def findLeafID(p: CARTPoint, root: TreeNode, bins: Array[Array[FeatureBin]]): (Int, Int) = {
     var leaf = root
     while (!leaf.is_leaf) {
       val split = leaf.split.get
@@ -86,7 +86,7 @@ object GBDT {
     * @param que queue stored splitting nodes
     * @param node left or right child of the splitting node
     */
-  def inQueue(que :mutable.Queue[CARTNode], node: Option[CARTNode]): Unit = {
+  def inQueue(que :mutable.Queue[TreeNode], node: Option[TreeNode]): Unit = {
     node match {
       case Some(n) => que.enqueue(n)
       case None => // RETURN
@@ -97,7 +97,7 @@ object GBDT {
 /**
   * Class of GBDT(Gradient Boosting Decision Tree).
   *
-  * @param impurity       an instance of [[Impurity]]
+  * @param impurity       impurity used to split node
   * @param max_depth      maximum depth of CART
   * @param max_bins       maximum number of bins
   * @param bin_samples    minimum number of samples used to find [[bda.spark.model.tree.FeatureSplit]] and [[FeatureBin]]
@@ -105,7 +105,7 @@ object GBDT {
   * @param min_info_gain  minimum information gain while splitting
   * @param num_round      number of rounds for GBDT
   */
-class GBDT(impurity: Impurity,
+class GBDT(impurity: String,
            max_depth: Int,
            max_bins: Int,
            bin_samples: Int,
@@ -122,14 +122,14 @@ class GBDT(impurity: Impurity,
   def train(train_data: RDD[LabeledPoint]): GBDTModel = {
 
     // Statistic information about training data
-    val impurity = this.impurity
+    val impurity = Impurities.fromString(this.impurity)
     val n_train = train_data.count().toInt
     val n_label = train_data.map(_.label.toInt).max() + 1
     val n_feature = train_data.map(_.fs.maxActiveIndex).max + 1
     val n_bins = Array.fill(n_feature)(max_bins)
 
     // Build container for roots
-    var wk_learners = new Array[CARTNode](0)
+    var wk_learners = new Array[TreeNode](0)
 
     // Find splits and bins fo each featue
     val (splits, bins) = findSplitsBins(train_data, n_train, n_feature, n_bins)
@@ -137,7 +137,7 @@ class GBDT(impurity: Impurity,
     // Convert LabeledPoint to GBDTPoint
     var gbdt_ps = GBDTPoint.toGBDTPoint(train_data, splits, n_label, n_feature).persist()
     // Convert GBDTPoint to CARTPoint
-    var cart_ps = CARTPoint.toCARTPoint(gbdt_ps)
+    val cart_ps = CARTPoint.toCARTPoint(gbdt_ps)
 
     // Build weak learner #0
     val wl0 = buildCART(cart_ps, n_label, n_feature, n_bins, bins, impurity)
@@ -156,7 +156,7 @@ class GBDT(impurity: Impurity,
             GBDTPoint(p.label, new_f_K, p.fs, p.binned_fs)
         }
         // Update CARTPoint
-        cart_ps = CARTPoint.toCARTPoint(gbdt_ps)
+        val cart_ps = CARTPoint.toCARTPoint(gbdt_ps)
         // Build weak learner #iter
         val wl = buildCART(cart_ps, n_label, n_feature, n_bins, bins, impurity)
         wk_learners ++= wl
@@ -189,7 +189,7 @@ class GBDT(impurity: Impurity,
                 n_feature: Int,
                 n_bins: Array[Int],
                 bins: Array[Array[FeatureBin]],
-                impurity: Impurity): Seq[CARTNode] = {
+                impurity: Impurity): Seq[TreeNode] = {
 
     cart_ps.persist()
 
@@ -201,10 +201,10 @@ class GBDT(impurity: Impurity,
     // Generate roots of CART for K labels
     val root = Range(0, n_label).map {
       id =>
-        new CARTNode(1, id, 0, n_feature, root_iprt(id), root_pred(id))
+        new TreeNode(1, id, 0, n_feature, 1.0, root_iprt(id), root_pred(id))
     }.toSeq
 
-    val node_que = mutable.Queue[CARTNode]()
+    val node_que = mutable.Queue[TreeNode]()
     root.foreach(node_que.enqueue(_))
 
     while (node_que.nonEmpty) {
@@ -263,7 +263,7 @@ class GBDT(impurity: Impurity,
                      n_bins: Array[Int],
                      n_feature: Int,
                      n_label: Int,
-                     leaves: Array[CARTNode],
+                     leaves: Array[TreeNode],
                      bins: Array[Array[FeatureBin]],
                      impurity: Impurity): Map[Int, NodeBestSplit] = {
     agg_leaves.map {
@@ -299,10 +299,10 @@ class GBDT(impurity: Impurity,
     * Method to collect splitting nodes.
     *
     * @param node_que a queue stored all splitting nodes
-    * @return         an array of [[CARTNode]] which will split next time
+    * @return         an array of [[TreeNode]] which will split next time
     */
-  def findCARTNodesToSplit(node_que: mutable.Queue[CARTNode]): Array[CARTNode] = {
-    val nodes_builder = mutable.ArrayBuilder.make[CARTNode]
+  def findCARTNodesToSplit(node_que: mutable.Queue[TreeNode]): Array[TreeNode] = {
+    val nodes_builder = mutable.ArrayBuilder.make[TreeNode]
     while (node_que.nonEmpty) {
       nodes_builder += node_que.dequeue()
     }

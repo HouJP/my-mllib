@@ -1,21 +1,23 @@
-package bda.spark.model.tree.gbdt
+package bda.spark.model.tree
 
-import bda.spark.model.tree.{NodeBestSplit, FeatureSplit}
+import bda.common.util.Sampler
 
 /**
-  * Class of nodes which form a CART model.
+  * Class of nodes which form a tree model.
   *
   * @param id       ID of the node, 1-based
   * @param id_label ID of the label, 0-based
-  * @param depth    depth of the node in a CART model, 0-based
+  * @param depth    depth of the node in a tree model, 0-based
   * @param n_fs     number of features
+  * @param col_rate sampling ratio of features
   * @param impurity impurity value of the node
   * @param predict  prediction value of the node
   */
-private[gbdt] class CARTNode (val id: Int,
+private[tree] class TreeNode (val id: Int,
                               val id_label: Int,
                               val depth: Int,
                               val n_fs: Int,
+                              val col_rate: Double,
                               val impurity: Double,
                               val predict: Double) extends Serializable {
 
@@ -24,9 +26,15 @@ private[gbdt] class CARTNode (val id: Int,
   /** splitting way of this node */
   var split: Option[FeatureSplit] = None
   /** left child */
-  var left_child: Option[CARTNode] = None
+  var left_child: Option[TreeNode] = None
   /** right child */
-  var right_child: Option[CARTNode] = None
+  var right_child: Option[TreeNode] = None
+  /** sub features */
+  val sub_fs = if(col_rate < 1.0 - 1e-6) {
+    Sampler.subSample(n_fs, col_rate)
+  } else {
+    Array.empty[Int]
+  }
 
   /**
     * Method to convert the node into a [[String]].
@@ -34,8 +42,35 @@ private[gbdt] class CARTNode (val id: Int,
     * @return a instance of [[String]] represented the node
     */
   override def toString = {
-    s"id($id), id_label($id_label), depth($depth), impurity($impurity), predict($predict), " +
+    s"id($id), depth($depth), impurity($impurity), predict($predict), " +
       s"split(${split.getOrElse("NoSplit")})"
+  }
+
+  /**
+    * Method to get sub features.
+    *
+    * @return an array represented sub features
+    */
+  def getSubFeatures: Array[Int] = {
+    if (col_rate < 1.0 - 1e-6) {
+      sub_fs
+    } else {
+      Range(0, n_fs).toArray
+    }
+  }
+
+  /**
+    * Map from sub feature ID to feature ID.
+    *
+    * @param sub_index index of the sub feature
+    * @return ID of feature
+    */
+  def subFeatureIndex2FeatureID(sub_index: Int): Int = {
+    if (col_rate < 1.0 - 1e-6) {
+      sub_fs(sub_index)
+    } else {
+      sub_index
+    }
   }
 
   /**
@@ -64,16 +99,18 @@ private[gbdt] class CARTNode (val id: Int,
 
       is_leaf = false
       split = Some(best_split.split)
-      left_child = Some(new CARTNode(id << 1,
+      left_child = Some(new TreeNode(id << 1,
         id_label,
         depth + 1,
         n_fs,
+        col_rate,
         best_split.l_impurity,
         best_split.l_predict))
-      right_child = Some(new CARTNode((id << 1) + 1,
+      right_child = Some(new TreeNode((id << 1) + 1,
         id_label,
         depth + 1,
         n_fs,
+        col_rate,
         best_split.r_impurity,
         best_split.r_predict))
     }

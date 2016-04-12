@@ -23,7 +23,7 @@ object RunSparkCART {
     val data_dir: String = input_dir + "regression/cadata/"
     val impurity: String = "Variance"
     val max_depth: Int = 10
-    val min_node_size: Int = 20
+    val min_node_size: Int = 15
     val min_info_gain: Double = 1e-6
     val max_bins: Int = 32
     val bin_samples: Int = 10000
@@ -52,10 +52,12 @@ object RunSparkCART {
 
     cart_model.printStructure()
 
-    val preds = test.map {
-      p =>
-        (p.label, cart_model.predict(p.fs))
-    }
-    println(s"Test RMSE: ${RMSE(preds)}")
+    // Error of training data set
+    val train_preds = cart_model.predict(train)
+    println(s"Train RMSE: ${RMSE(train_preds)}")
+
+    // Error of testing data set
+    val test_preds = cart_model.predict(test)
+    println(s"Test RMSE: ${RMSE(test_preds)}")
   }
 }

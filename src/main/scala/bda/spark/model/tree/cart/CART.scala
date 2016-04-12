@@ -2,7 +2,7 @@ package bda.spark.model.tree.cart
 
 import bda.common.obj.LabeledPoint
 import bda.common.Logging
-import bda.spark.model.tree.{NodeBestSplit, FeatureSplit, FeatureBin}
+import bda.spark.model.tree.{TreeNode, NodeBestSplit, FeatureSplit, FeatureBin}
 import bda.spark.model.tree.cart.impurity.{ImpurityAggregator, Impurity, Impurities}
 import org.apache.spark.rdd.RDD
 
@@ -33,7 +33,7 @@ object CART {
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6): CARTModel = {
 
-    new CART(Impurities.fromString(impurity),
+    new CART(impurity,
       max_depth,
       max_bins,
       bin_samples,
@@ -51,7 +51,7 @@ object CART {
     * @param bins a two-dimension array stored bins of all features
     * @return     ID of splitting node which contains specified data point
     */
-  def findLeafID(p: CARTPoint, root: CARTNode, bins: Array[Array[FeatureBin]]): Int = {
+  def findLeafID(p: CARTPoint, root: TreeNode, bins: Array[Array[FeatureBin]]): Int = {
     var leaf = root
     while (!leaf.is_leaf) {
       val split = leaf.split.get
@@ -71,7 +71,7 @@ object CART {
     * @param que  queue stored splitting nodes
     * @param node left or right child of the splitting node
     */
-  def inQueue(que :mutable.Queue[CARTNode], node: Option[CARTNode]): Unit = {
+  def inQueue(que :mutable.Queue[TreeNode], node: Option[TreeNode]): Unit = {
     node match {
       case Some(n) => que.enqueue(n)
       case None => // RETURN
@@ -82,7 +82,7 @@ object CART {
 /**
   * Class of CART(Classification And Regression Trees).
   *
-  * @param impurity      an instance of [[Impurity]]
+  * @param impurity      impurity type with [[String]]
   * @param max_depth     maximum depth of CART
   * @param max_bins      maximum number of bins
   * @param bin_samples   minimum number of samples used to find [[bda.spark.model.tree.FeatureSplit]] and [[FeatureBin]]
@@ -91,7 +91,7 @@ object CART {
   * @param row_rate      sample ratio of training data set
   * @param col_rate      sample ratio of features
   */
-class CART(impurity: Impurity,
+class CART(impurity: String,
            max_depth: Int,
            max_bins: Int,
            bin_samples: Int,
@@ -107,7 +107,7 @@ class CART(impurity: Impurity,
     * @return           an instance of [[CARTModel]]
     */
   def train(train_data: RDD[LabeledPoint]): CARTModel = {
-    val impurity = this.impurity
+    val impurity = Impurities.fromString(this.impurity)
     val n_train = train_data.count().toInt
     val n_fs = train_data.map(_.fs.maxActiveIndex).max + 1
     val n_sub_fs = (n_fs * col_rate).ceil.toInt
@@ -123,7 +123,7 @@ class CART(impurity: Impurity,
     val root_stat = impurity.stat(cart_ps)
     val root_iprt = impurity.calculate(root_stat)
     val root_pred = impurity.predict(root_stat)
-    val root = new CARTNode(1, 0, n_fs, col_rate, root_iprt, root_pred)
+    val root = new TreeNode(1, 0, 0, n_fs, col_rate, root_iprt, root_pred)
 
     val node_que = mutable.Queue(root)
     while (node_que.nonEmpty) {
@@ -142,14 +142,18 @@ class CART(impurity: Impurity,
               val id_leaf = CART.findLeafID(p, root, bins)
               if (id_pos_leaves.contains(id_leaf)) {
                 val pos_leaf = id_pos_leaves(id_leaf)
-                aggs(pos_leaf).update(p, leaves(pos_leaf).sub_fs)
+                aggs(pos_leaf).update(p, leaves(pos_leaf).getSubFeatures)
               }
           }
           aggs.view.zipWithIndex.map(_.swap).iterator
       }.reduceByKey((a, b) => a.merge(b))
+      // println(s"HouJP >> agg_leaves:")
+      // agg_leaves.foreach(println)
 
       // Find best splits for leaves
       val best_splits = findBestSplits(agg_leaves, n_bins, n_sub_fs, leaves, bins, impurity)
+      // println(s"HouJP >> best splits:")
+      // best_splits.foreach(println)
       best_splits.foreach {
         case (pos, best_split) =>
           leaves(pos).split(best_split, max_depth, min_info_gain, min_node_size)
@@ -186,7 +190,7 @@ class CART(impurity: Impurity,
   def findBestSplits(agg_leaves: RDD[(Int, ImpurityAggregator)],
                      n_bins: Array[Int],
                      n_sub_fs: Int,
-                     leaves: Array[CARTNode],
+                     leaves: Array[TreeNode],
                      bins: Array[Array[FeatureBin]],
                      impurity: Impurity): Map[Int, NodeBestSplit] = {
     agg_leaves.map {
@@ -195,7 +199,7 @@ class CART(impurity: Impurity,
 
         val best_split = Range(0, n_sub_fs).flatMap {
           id_sub_f =>
-            val id_f = leaves(pos).sub_fs(id_sub_f)
+            val id_f = leaves(pos).subFeatureIndex2FeatureID(id_sub_f)
             val n_split = n_bins(id_f) - 1
             Range(0, n_split).map {
               id_s =>
@@ -223,10 +227,10 @@ class CART(impurity: Impurity,
     * Method to collect splitting nodes.
     *
     * @param node_que   a queue stored all splitting nodes
-    * @return           an array of [[CARTNode]] which will split next time
+    * @return           an array of [[TreeNode]] which will split next time
     */
-  def findCARTNodesToSplit(node_que: mutable.Queue[CARTNode]): Array[CARTNode] = {
-    val nodes_builder = mutable.ArrayBuilder.make[CARTNode]
+  def findCARTNodesToSplit(node_que: mutable.Queue[TreeNode]): Array[TreeNode] = {
+    val nodes_builder = mutable.ArrayBuilder.make[TreeNode]
     while (node_que.nonEmpty) {
       nodes_builder += node_que.dequeue()
     }

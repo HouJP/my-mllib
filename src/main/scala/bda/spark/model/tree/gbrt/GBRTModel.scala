@@ -1,14 +1,14 @@
-package bda.spark.model.tree.gbdt
+package bda.spark.model.tree.gbrt
 
 import bda.common.linalg.immutable.SparseVector
 import bda.common.obj.LabeledPoint
 import bda.spark.model.tree.TreeNode
-import bda.spark.model.tree.gbdt.impurity.Impurity
+import bda.spark.model.tree.cart.CARTModel
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
 /**
-  * Model of GBDT(Gradient Boosting Decision Trees).
+  * Model of GBRT(Gradient Boosting Regression Trees).
   *
   * @param impurity      impurity used to split node of model
   * @param max_depth     maximum depth of CART
@@ -17,17 +17,17 @@ import org.apache.spark.rdd.RDD
   * @param min_node_size minimum number of data point instances in leaves
   * @param min_info_gain minimum information gain while splitting
   * @param num_round     number of rounds
-  * @param num_label     number of different labels
-  * @param wk_learners   weak learners of GBDT model
+  * @param learn_rate    learning rate
+  * @param wk_learners   weak learners of GBRT model
   */
-class GBDTModel(impurity: Impurity,
+class GBRTModel(impurity: String,
                 max_depth: Int,
                 max_bins: Int,
                 bin_samples: Int,
                 min_node_size: Int,
                 min_info_gain: Double,
                 num_round: Int,
-                num_label: Int,
+                learn_rate: Double,
                 wk_learners: Array[TreeNode]) {
 
   /**
@@ -37,10 +37,10 @@ class GBDTModel(impurity: Impurity,
     * @return a RDD stored predictions.
     */
   def predict(input: RDD[LabeledPoint]): RDD[(Double, Double)] = {
+    val learn_rate = this.learn_rate
     val wk_learners = this.wk_learners
-    val num_label = this.num_label
 
-    input.map(lp => (lp.label, GBDTModel.predict(lp.fs, wk_learners, num_label)))
+    input.map(lp => (lp.label, GBRTModel.predict(lp.fs, wk_learners, learn_rate)))
   }
 
   /**
@@ -50,11 +50,11 @@ class GBDTModel(impurity: Impurity,
     * @return the prediction for specified data point
     */
   def predict(p: SparseVector[Double]): Double = {
-    GBDTModel.predict(p, wk_learners, num_label)
+    GBRTModel.predict(p, wk_learners, learn_rate)
   }
 
   /**
-    * Method to store model of GBDT on disk.
+    * Method to store model of GBRT on disk.
     *
     * @param sc an instance of [[SparkContext]]
     * @param pt path of the model location on disk
@@ -66,46 +66,28 @@ class GBDTModel(impurity: Impurity,
 }
 
 /**
-  * Static methods for [[GBDTModel]].
+  * Static methods for [[GBRTModel]].
   */
-private[gbdt] object GBDTModel {
+private[gbrt] object GBRTModel {
 
   /**
     * Method to predict value for single data point using the model trained.
     *
-    * @param fs      feature vector of single data point
-    * @param n_label number of different labels
+    * @param fs         feature vector of single data point
+    * @param learn_rate learning rate
     * @return the prediction for specified data point
     */
   def predict(fs: SparseVector[Double],
               wk_learners: Array[TreeNode],
-              n_label: Int): Double = {
-    val preds = Array.fill[Double](n_label)(0.0)
+              learn_rate: Double): Double = {
+    require(0 < wk_learners.length,
+      s"require length(weak learners) > 0 in GBRT model")
 
-    wk_learners.indices.foreach {
+    var pred = CARTModel.predict(fs, wk_learners(0))
+    Range(1, wk_learners.length).foreach {
       id =>
-        preds(id % n_label) += GBDTModel.predict(fs, wk_learners(id))
+        pred += learn_rate * CARTModel.predict(fs, wk_learners(id))
     }
-
-    preds.zipWithIndex.maxBy(_._1)._2
-  }
-
-  /**
-    * Method to predict value for single data point using the model trained.
-    *
-    * @param fs   feature vector of single data point
-    * @param root root of CART model
-    * @return the prediction for specified data point
-    */
-  def predict(fs: SparseVector[Double], root: TreeNode): Double = {
-    var node = root
-    while (!node.is_leaf) {
-      if (fs(node.split.get.id_f) < node.split.get.threshold) {
-        node = node.left_child.get
-      } else {
-        node = node.right_child.get
-      }
-    }
-    node.predict
+    pred
   }
 }

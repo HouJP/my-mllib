@@ -1,8 +1,9 @@
 package bda.example.cadata
 
+import bda.spark.evaluate.Regression._
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.{SparkContext, SparkConf}
-import bda.spark.model.tree.{RandomForestModel, RandomForest}
+import bda.spark.model.tree.rf.{RandomForestModel, RandomForest}
 import bda.spark.reader.Points
 import bda.example.{input_dir, tmp_dir}
 
@@ -20,7 +21,6 @@ object RunSparkRandomForest {
 
     val data_dir: String = input_dir + "regression/cadata/"
     val impurity: String = "Variance"
-    val loss: String = "SquaredError"
     val max_depth: Int = 10
     val max_bins: Int = 32
     val min_samples: Int = 10000
@@ -42,11 +42,9 @@ object RunSparkRandomForest {
     train.cache()
     test.cache()
 
-    val model: RandomForestModel = RandomForest.train(
+    val rf_model: RandomForestModel = RandomForest.train(
       train,
-      test,
       impurity,
-      loss,
       max_depth,
       max_bins,
       min_samples,
@@ -55,5 +53,13 @@ object RunSparkRandomForest {
       row_rate,
       col_rate,
       num_trees)
+
+    // Error of training data set
+    val train_preds = rf_model.predict(train)
+    println(s"Train RMSE: ${RMSE(train_preds)}")
+
+    // Error of testing data set
+    val test_preds = rf_model.predict(test)
+    println(s"Test RMSE: ${RMSE(test_preds)}")
   }
 }
