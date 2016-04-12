@@ -26,7 +26,7 @@ object RandomForest {
     * @param row_rate sample ratio of train data set, default is 0.6
     * @param col_rate sample ratio of features, default is 0.6
     * @param num_trees Number of decision trees, default is 20
-    * @return a [[bda.spark.model.tree.RandomForestModel]] instance
+    * @return a [[bda.spark.model.tree.rf.RandomForestModel]] instance
     */
   def train(train_data: RDD[LabeledPoint],
             impurity: String = "Variance",
@@ -54,7 +54,7 @@ object RandomForest {
 /**
   * A class which implement random forest algorithm.
   *
-  * @param impurity Impurity type with [[bda.spark.model.tree.Impurity]]
+  * @param impurity impurity used to split node
   * @param max_depth Maximum depth of the decision tree
   * @param max_bins Maximum number of bins
   * @param bin_samples Minimum number of samples used in finding splits and bins
@@ -79,7 +79,7 @@ private[tree] class RandomForestTrainer(impurity: String,
     * epresented as an RDD of [[bda.common.obj.LabeledPoint]].
     *
     * @param train_data Training data points.
-    * @return a [[bda.spark.model.tree.RandomForestModel]] instance which can be used to predict.
+    * @return a [[bda.spark.model.tree.rf.RandomForestModel]] instance which can be used to predict.
     */
   def train(train_data: RDD[LabeledPoint]): RandomForestModel = {
 

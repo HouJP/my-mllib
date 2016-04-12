@@ -147,13 +147,9 @@ class CART(impurity: String,
           }
           aggs.view.zipWithIndex.map(_.swap).iterator
       }.reduceByKey((a, b) => a.merge(b))
-      // println(s"HouJP >> agg_leaves:")
-      // agg_leaves.foreach(println)
 
       // Find best splits for leaves
       val best_splits = findBestSplits(agg_leaves, n_bins, n_sub_fs, leaves, bins, impurity)
-      // println(s"HouJP >> best splits:")
-      // best_splits.foreach(println)
       best_splits.foreach {
         case (pos, best_split) =>
           leaves(pos).split(best_split, max_depth, min_info_gain, min_node_size)

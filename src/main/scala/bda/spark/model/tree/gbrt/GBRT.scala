@@ -1,6 +1,7 @@
 package bda.spark.model.tree.gbrt
 
 import bda.common.obj.LabeledPoint
+import bda.spark.evaluate.Regression._
 import bda.spark.model.tree.TreeNode
 import bda.spark.model.tree.cart.{CARTModel, CART}
 import org.apache.spark.rdd.RDD
@@ -19,7 +20,8 @@ object GBRT {
     * @param impurity      impurity used to split node, default is "Variance"
     * @param max_depth     maximum depth of the CART default is 10
     * @param max_bins      maximum number of bins, default is 32
-    * @param bin_samples   minimum number of samples used to find [[bda.spark.model.tree.FeatureSplit]] and [[bda.spark.model.tree.FeatureBin]], default is 10000
+    * @param bin_samples   minimum number of samples used to find [[bda.spark.model.tree.FeatureSplit]]
+    *                      and [[bda.spark.model.tree.FeatureBin]], default is 10000
     * @param min_node_size minimum number of instances in leaves, default is 15
     * @param min_info_gain minimum infomation gain while splitting, default is 1e-6
     * @param num_round     number of rounds for GBDT
@@ -76,15 +78,12 @@ class GBRT(impurity: String,
     */
   def train(train_data: RDD[LabeledPoint]): GBRTModel = {
 
-    // Statistic information about training data
-    val n_train = train_data.count().toInt
-
     // Build container for roots
     val wk_learners = mutable.ArrayBuffer[TreeNode]()
     // var wk_learners = new Array[TreeNode](0)
 
     // Convert LabeledPoint to GBRTPoint
-    var gbrt_ps = GBRTPoint.toGBRTPoint(train_data)
+    var gbrt_ps = GBRTPoint.toGBRTPoint(train_data).persist()
     // Convert GBRTPoint to training data set of CART
     val cart_ps = gbrt_ps.map {
       p =>
@@ -101,33 +100,42 @@ class GBRT(impurity: String,
       1.0, 1.0).train(cart_ps)
     wk_learners += wl0.root
 
-    Range(1, num_round).foreach {
-      iter =>
-        val factor = if (1 == iter) {
-          1.0
-        } else {
-          learn_rate
-        }
-        // Update GBRT points
-        gbrt_ps = gbrt_ps.map {
-          p =>
-            val new_f = p.label + factor * CARTModel.predict(p.fs, wk_learners.last)
-            GBRTPoint(p.label, new_f, p.fs)
-        }
-        // Update CART points
-        val cart_ps = gbrt_ps.map {
-          p =>
-            LabeledPoint(p.label - p.f, p.fs)
-        }
-        // Build weak learner #iter
-        val wl = new CART(impurity,
-          max_depth,
-          max_bins,
-          bin_samples,
-          min_node_size,
-          min_info_gain,
-          1.0, 1.0).train(cart_ps)
-        wk_learners += wl.root
+    var iter = 1
+    while (iter < num_round) {
+      val factor = if (1 == iter) {
+        1.0
+      } else {
+        learn_rate
+      }
+      // Update GBRT points
+      val pre_gbrt_ps = gbrt_ps
+      gbrt_ps = gbrt_ps.map {
+        p =>
+          val new_f = p.f + factor * CARTModel.predict(p.fs, wk_learners.last)
+          GBRTPoint(p.label, new_f, p.fs)
+      }.persist()
+      // Check point
+      if (19 == iter % 20) {
+        gbrt_ps.checkpoint()
+      }
+      gbrt_ps.count()
+      pre_gbrt_ps.unpersist()
+      // Update CART points
+      val cart_ps = gbrt_ps.map {
+        p =>
+          LabeledPoint(p.label - p.f, p.fs)
+      }
+      // Build weak learner #iter
+      val wl = new CART(impurity,
+        max_depth,
+        max_bins,
+        bin_samples,
+        min_node_size,
+        min_info_gain,
+        1.0, 1.0).train(cart_ps)
+      wk_learners += wl.root
+
+      iter += 1
     }
 
     new GBRTModel(this.impurity,

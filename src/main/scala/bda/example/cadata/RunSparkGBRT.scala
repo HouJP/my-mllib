@@ -28,14 +28,6 @@ object RunSparkGBRT {
     sc.setCheckpointDir(tmp_dir)
 
     val data_dir: String = input_dir + "regression/cadata/"
-    val impurity: String = "Variance"
-    val max_depth: Int = 15
-    val max_bins: Int = 32
-    val bin_samples: Int = 10000
-    val min_node_size: Int = 10
-    val min_info_gain: Double = 1e-6
-    val num_round: Int = 200
-    val learn_rate: Double = 0.01
 
     val train = Points.readLibSVMFile(sc, data_dir + "cadata.train")
     val test = Points.readLibSVMFile(sc, data_dir + "cadata.test")
@@ -45,14 +37,14 @@ object RunSparkGBRT {
 
     val gbrt_model = GBRT.train(
       train,
-      impurity,
-      max_depth,
-      max_bins,
-      bin_samples,
-      min_node_size,
-      min_info_gain,
-      num_round,
-      learn_rate)
+      impurity = "Variance",
+      max_depth = 15,
+      max_bins = 32,
+      bin_samples = 10000,
+      min_node_size = 10,
+      min_info_gain = 1e-6,
+      num_round = 100,
+      learn_rate = 0.01)
 
     // Error of training data set
     val train_preds = gbrt_model.predict(train)

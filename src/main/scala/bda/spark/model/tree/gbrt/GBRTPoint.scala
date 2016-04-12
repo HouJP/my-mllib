@@ -21,7 +21,7 @@ private[gbrt] case class GBRTPoint(label: Double,
     * @return an instance of [[String]] which represent the point
     */
   override def toString = {
-    s"label($label),f_K($f),fs($fs)"
+    s"label($label),f($f),fs($fs)"
   }
 }
 
