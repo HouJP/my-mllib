@@ -31,13 +31,18 @@ private[cart] trait Impurity extends Serializable {
   /**
     * Calculate the weighted impurity according to number and impurity of left and right children.
     *
-    * @param l_count number of left child
-    * @param r_count number of right child
-    * @param l_impurity impurity of left child
-    * @param r_impurity impurity of right child
+    * @param l_count       number of left child
+    * @param r_count       number of right child
+    * @param l_impurity    impurity of left child
+    * @param r_impurity    impurity of right child
+    * @param min_node_size minimum size of node
     * @return the weighted impurity
     */
-  def calculate_weighted(l_count: Double, r_count: Double, l_impurity: Double, r_impurity: Double): Double
+  def calculate_weighted(l_count: Double,
+                         r_count: Double,
+                         l_impurity: Double,
+                         r_impurity: Double,
+                         min_node_size: Int): Double
 
   /**
     * Predict the value for a node.

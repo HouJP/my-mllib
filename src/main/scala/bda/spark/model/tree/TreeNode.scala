@@ -8,6 +8,7 @@ import bda.common.util.Sampler
   * @param id       ID of the node, 1-based
   * @param id_label ID of the label, 0-based
   * @param depth    depth of the node in a tree model, 0-based
+  * @param count    number of instances
   * @param n_fs     number of features
   * @param col_rate sampling ratio of features
   * @param impurity impurity value of the node
@@ -15,6 +16,7 @@ import bda.common.util.Sampler
   */
 private[tree] class TreeNode (val id: Int,
                               val id_label: Int,
+                              val count: Double,
                               val depth: Int,
                               val n_fs: Int,
                               val col_rate: Double,
@@ -42,7 +44,7 @@ private[tree] class TreeNode (val id: Int,
     * @return a instance of [[String]] represented the node
     */
   override def toString = {
-    s"id($id), depth($depth), impurity($impurity), predict($predict), " +
+    s"id($id),count($count),depth($depth),impurity($impurity),predict($predict)," +
       s"split(${split.getOrElse("NoSplit")})"
   }
 
@@ -101,6 +103,7 @@ private[tree] class TreeNode (val id: Int,
       split = Some(best_split.split)
       left_child = Some(new TreeNode(id << 1,
         id_label,
+        best_split.l_count,
         depth + 1,
         n_fs,
         col_rate,
@@ -108,6 +111,7 @@ private[tree] class TreeNode (val id: Int,
         best_split.l_predict))
       right_child = Some(new TreeNode((id << 1) + 1,
         id_label,
+        best_split.r_count,
         depth + 1,
         n_fs,
         col_rate,

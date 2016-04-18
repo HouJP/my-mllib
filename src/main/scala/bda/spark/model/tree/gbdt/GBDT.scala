@@ -1,6 +1,8 @@
 package bda.spark.model.tree.gbdt
 
+import bda.common.Logging
 import bda.common.obj.LabeledPoint
+import bda.common.util.{Timer, Msg}
 import bda.spark.model.tree.{TreeNode, NodeBestSplit, FeatureBin, FeatureSplit}
 import bda.spark.model.tree.gbdt.impurity.{ImpurityAggregator, Impurities, Impurity}
 import org.apache.spark.rdd.RDD
@@ -10,7 +12,7 @@ import scala.collection.mutable
 /**
   * External interface of GBDT(Gradient Boosting Decisision Trees) on spark.
   */
-object GBDT {
+object GBDT extends Logging {
 
   /**
     * An adapter for training a GBDT model.
@@ -33,6 +35,17 @@ object GBDT {
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6,
             num_round: Int = 10): GBDTModel = {
+
+    val msg = Msg("n(train_data)" -> train_data.count(),
+      "impurity" -> impurity,
+      "max_depth" -> max_depth,
+      "max_bins" -> max_bins,
+      "bin_samples" -> bin_samples,
+      "min_node_size" -> min_node_size,
+      "min_info_gain" -> min_info_gain,
+      "num_round" -> num_round
+    )
+    logInfo(msg.toString)
 
     new GBDT(impurity,
       max_depth,
@@ -111,7 +124,7 @@ class GBDT(impurity: String,
            bin_samples: Int,
            min_node_size: Int,
            min_info_gain: Double,
-           num_round: Int) {
+           num_round: Int) extends Logging{
 
   /**
     * Method to train a GBDT model based on training data set.
@@ -120,6 +133,7 @@ class GBDT(impurity: String,
     * @return           an instance of [[GBDTModel]]
     */
   def train(train_data: RDD[LabeledPoint]): GBDTModel = {
+    val timer = new Timer()
 
     // Statistic information about training data
     val impurity = Impurities.fromString(this.impurity)
@@ -140,8 +154,10 @@ class GBDT(impurity: String,
     val cart_ps = CARTPoint.toCARTPoint(gbdt_ps)
 
     // Build weak learner #0
-    val wl0 = buildCART(cart_ps, n_label, n_feature, n_bins, bins, impurity)
+    val wl0 = buildCART(0, cart_ps, n_train, n_label, n_feature, n_bins, bins, impurity)
     wk_learners ++= wl0
+
+    logInfo("GBDT Model round#1 training done")
 
     Range(1, num_round).foreach {
       iter =>
@@ -153,14 +169,18 @@ class GBDT(impurity: String,
               id =>
                 p.f_K(id) + GBDTModel.predict(p.fs, wk_learners((iter - 1) * n_label + id))
             }.toArray
-            GBDTPoint(p.label, new_f_K, p.fs, p.binned_fs)
+            GBDTPoint(p.id, p.label, new_f_K, p.fs, p.binned_fs)
         }
         // Update CARTPoint
         val cart_ps = CARTPoint.toCARTPoint(gbdt_ps)
         // Build weak learner #iter
-        val wl = buildCART(cart_ps, n_label, n_feature, n_bins, bins, impurity)
+        val wl = buildCART(iter, cart_ps, n_train, n_label, n_feature, n_bins, bins, impurity)
         wk_learners ++= wl
+
+        logInfo(s"GBDT Model round#${iter + 1} training done")
     }
+
+    logInfo(s"GBDT Model training done, cost time ${timer.cost()}ms")
 
     new GBDTModel(impurity,
       max_depth,
@@ -176,15 +196,19 @@ class GBDT(impurity: String,
   /**
     * Method to train a CART model as a weak learner of GBDT.
     *
-    * @param cart_ps    training data set used to build CART model
-    * @param n_label    number of different labels
-    * @param n_feature  number of features
-    * @param n_bins     number of bins for all features
-    * @param bins       bins of all features
-    * @param impurity   the impurity used to split node of CART
+    * @param iter      id of iteration
+    * @param cart_ps   training data set used to build CART model
+    * @param n_train   number of training data set
+    * @param n_label   number of different labels
+    * @param n_feature number of features
+    * @param n_bins    number of bins for all features
+    * @param bins      bins of all features
+    * @param impurity  the impurity used to split node of CART
     * @return
     */
-  def buildCART(cart_ps: RDD[CARTPoint],
+  def buildCART(iter: Int,
+                cart_ps: RDD[CARTPoint],
+                n_train: Int,
                 n_label: Int,
                 n_feature: Int,
                 n_bins: Array[Int],
@@ -201,7 +225,7 @@ class GBDT(impurity: String,
     // Generate roots of CART for K labels
     val root = Range(0, n_label).map {
       id =>
-        new TreeNode(1, id, 0, n_feature, 1.0, root_iprt(id), root_pred(id))
+        new TreeNode(1, id, n_train, 0, n_feature, 1.0, root_iprt(id), root_pred(id))
     }.toSeq
 
     val node_que = mutable.Queue[TreeNode]()
@@ -233,7 +257,15 @@ class GBDT(impurity: String,
       }.reduceByKey((a, b) => a.merge(b))
 
       // Find best splits for leaves
-      val best_splits = findBestSplits(agg_leaves, n_bins, n_feature, n_label, leaves, bins, impurity)
+      val best_splits = findBestSplits(agg_leaves,
+        n_bins,
+        n_feature,
+        n_label,
+        leaves,
+        bins,
+        impurity,
+        min_node_size)
+
       best_splits.foreach {
         case (pos, best_split) =>
           leaves(pos).split(best_split, max_depth, min_info_gain, min_node_size)
@@ -265,7 +297,8 @@ class GBDT(impurity: String,
                      n_label: Int,
                      leaves: Array[TreeNode],
                      bins: Array[Array[FeatureBin]],
-                     impurity: Impurity): Map[Int, NodeBestSplit] = {
+                     impurity: Impurity,
+                     min_node_size: Int): Map[Int, NodeBestSplit] = {
     agg_leaves.map {
       case (pos, agg) =>
         agg.toPrefixSum
@@ -278,7 +311,7 @@ class GBDT(impurity: String,
                 val (l_impurity, l_predict, l_count) = agg.calLeftInfo(id_f, id_s, n_label)
                 val (r_impurity, r_predict, r_count) = agg.calRightInfo(id_f, id_s, n_label)
 
-                val weighted_impurity = impurity.calculate_weighted(l_count, r_count, l_impurity, r_impurity)
+                val weighted_impurity = impurity.calculate_weighted(l_count, r_count, l_impurity, r_impurity, min_node_size)
 
                 new NodeBestSplit(weighted_impurity,
                   l_impurity,

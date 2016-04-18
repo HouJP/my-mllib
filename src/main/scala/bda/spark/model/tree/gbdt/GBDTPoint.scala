@@ -13,7 +13,8 @@ import org.apache.spark.rdd.RDD
   * @param fs        features of the data point
   * @param binned_fs binned features of the data point
   */
-private[gbdt] case class GBDTPoint(label: Int,
+private[gbdt] case class GBDTPoint(id: String,
+                                   label: Int,
                                    f_K: Array[Double],
                                    fs: SparseVector[Double],
                                    binned_fs: Array[Int]) extends Serializable {
@@ -24,7 +25,7 @@ private[gbdt] case class GBDTPoint(label: Int,
     * @return an instance of [[String]] which represent the point
     */
   override def toString = {
-    s"label($label),f_K(${f_K.mkString(",")}),binned_fs(${binned_fs.mkString(",")})"
+    s"id($id),label($label),f_K(${f_K.mkString(",")}),binned_fs(${binned_fs.mkString(",")})"
   }
 }
 
@@ -73,7 +74,7 @@ private[gbdt] object GBDTPoint {
         binned_fs(id_f) = binned_f
     }
 
-    new GBDTPoint(lp.label.toInt, Array.fill[Double](n_label)(0.0), lp.fs, binned_fs)
+    new GBDTPoint(lp.id, lp.label.toInt, Array.fill[Double](n_label)(0.0), lp.fs, binned_fs)
   }
 
   /**

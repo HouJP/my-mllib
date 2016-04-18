@@ -2,6 +2,8 @@ package bda.spark.model.tree.cart
 
 import bda.common.obj.LabeledPoint
 import bda.common.Logging
+import bda.common.stat.Counter
+import bda.common.util.{Timer, Msg}
 import bda.spark.model.tree.{TreeNode, NodeBestSplit, FeatureSplit, FeatureBin}
 import bda.spark.model.tree.cart.impurity.{ImpurityAggregator, Impurity, Impurities}
 import org.apache.spark.rdd.RDD
@@ -11,7 +13,7 @@ import scala.collection.mutable
 /**
   * External interface of CART(Classification And Regression Trees) on spark.
   */
-object CART {
+object CART extends Logging {
 
   /**
     * An adapter for training a CART model.
@@ -32,6 +34,16 @@ object CART {
             bin_samples: Int = 10000,
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6): CARTModel = {
+
+    val msg = Msg("n(train_data)" -> train_data.count(),
+      "impurity" -> impurity,
+      "max_depth" -> max_depth,
+      "max_bins" -> max_bins,
+      "bin_samples" -> bin_samples,
+      "min_node_size" -> min_node_size,
+      "min_info_gain" -> min_info_gain
+    )
+    logInfo(msg.toString)
 
     new CART(impurity,
       max_depth,
@@ -107,6 +119,7 @@ class CART(impurity: String,
     * @return           an instance of [[CARTModel]]
     */
   def train(train_data: RDD[LabeledPoint]): CARTModel = {
+    val timer = new Timer()
     val impurity = Impurities.fromString(this.impurity)
     val n_train = train_data.count().toInt
     val n_fs = train_data.map(_.fs.maxActiveIndex).max + 1
@@ -123,7 +136,7 @@ class CART(impurity: String,
     val root_stat = impurity.stat(cart_ps)
     val root_iprt = impurity.calculate(root_stat)
     val root_pred = impurity.predict(root_stat)
-    val root = new TreeNode(1, 0, 0, n_fs, col_rate, root_iprt, root_pred)
+    val root = new TreeNode(1, 0, n_train.toDouble, 0, n_fs, col_rate, root_iprt, root_pred)
 
     val node_que = mutable.Queue(root)
     while (node_que.nonEmpty) {
@@ -149,7 +162,7 @@ class CART(impurity: String,
       }.reduceByKey((a, b) => a.merge(b))
 
       // Find best splits for leaves
-      val best_splits = findBestSplits(agg_leaves, n_bins, n_sub_fs, leaves, bins, impurity)
+      val best_splits = findBestSplits(agg_leaves, n_bins, n_sub_fs, leaves, bins, impurity, min_node_size)
       best_splits.foreach {
         case (pos, best_split) =>
           leaves(pos).split(best_split, max_depth, min_info_gain, min_node_size)
@@ -159,6 +172,8 @@ class CART(impurity: String,
     }
 
     cart_ps.unpersist()
+
+    logInfo(s"CART Model training done, cost time ${timer.cost()}ms")
 
     new CARTModel(root,
       n_fs,
@@ -175,12 +190,13 @@ class CART(impurity: String,
   /**
     * Method to find best splits for splitting nodes.
     *
-    * @param agg_leaves   impurity aggregator for splitting nodes
-    * @param n_bins       number of bins for all features
-    * @param n_sub_fs     number of sub features
-    * @param leaves       an array stored leaves
-    * @param bins         bins of all features
-    * @param impurity     an instance of [[Impurity]]
+    * @param agg_leaves    impurity aggregator for splitting nodes
+    * @param n_bins        number of bins for all features
+    * @param n_sub_fs      number of sub features
+    * @param leaves        an array stored leaves
+    * @param bins          bins of all features
+    * @param impurity      an instance of [[Impurity]]
+    * @param min_node_size minimum size of node
     * @return             (position-id, [[FeatureSplit]])
     */
   def findBestSplits(agg_leaves: RDD[(Int, ImpurityAggregator)],
@@ -188,7 +204,8 @@ class CART(impurity: String,
                      n_sub_fs: Int,
                      leaves: Array[TreeNode],
                      bins: Array[Array[FeatureBin]],
-                     impurity: Impurity): Map[Int, NodeBestSplit] = {
+                     impurity: Impurity,
+                     min_node_size: Int): Map[Int, NodeBestSplit] = {
     agg_leaves.map {
       case (pos, agg) =>
         agg.toPrefixSum
@@ -202,9 +219,15 @@ class CART(impurity: String,
                 val (l_impurity, l_predict, l_count) = agg.calLeftInfo(id_f, id_s)
                 val (r_impurity, r_predict, r_count) = agg.calRightInfo(id_f, id_s)
 
-                val weighted_impurity = impurity.calculate_weighted(l_count, r_count, l_impurity, r_impurity)
+                val weighted_impurity = impurity.calculate_weighted(
+                  l_count,
+                  r_count,
+                  l_impurity,
+                  r_impurity,
+                  min_node_size)
 
-                new NodeBestSplit(weighted_impurity,
+                new NodeBestSplit(
+                  weighted_impurity,
                   l_impurity,
                   r_impurity,
                   l_predict,
@@ -301,13 +324,11 @@ class CART(impurity: String,
                   n_bins: Array[Int]): Array[Double] = {
 
     // Count number of each distinct value
-    val cnt = sampled_f.foldLeft(Map.empty[Double, Int]) {
-      (m, v) => m + ((v, m.getOrElse(v, 0) + 1))
-    }.toArray.sortBy(_._1)
+    val cnt = Counter(sampled_f).toArray.sortBy(_._1)
 
     val possible_vs = cnt.length
     if (possible_vs <= n_bins(id_f)) {
-      cnt.map(_._1).slice(1, possible_vs)
+      cnt.map(_._1).tail
     } else {
       val ave = sampled_f.length.toDouble / n_bins(id_f)
       val n_sp = n_bins(id_f) - 1

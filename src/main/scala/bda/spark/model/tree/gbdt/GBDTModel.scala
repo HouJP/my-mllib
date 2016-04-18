@@ -28,7 +28,7 @@ class GBDTModel(impurity: Impurity,
                 min_info_gain: Double,
                 num_round: Int,
                 num_label: Int,
-                wk_learners: Array[TreeNode]) {
+                wk_learners: Array[TreeNode]) extends Serializable{
 
   /**
     * Method to predict value for given data point using the model trained.
@@ -36,11 +36,11 @@ class GBDTModel(impurity: Impurity,
     * @param input test data set which represented as a RDD of [[LabeledPoint]]
     * @return a RDD stored predictions.
     */
-  def predict(input: RDD[LabeledPoint]): RDD[(Double, Double)] = {
+  def predict(input: RDD[LabeledPoint]): RDD[(String, Double, Double)] = {
     val wk_learners = this.wk_learners
     val num_label = this.num_label
 
-    input.map(lp => (lp.label, GBDTModel.predict(lp.fs, wk_learners, num_label)))
+    input.map(lp => (lp.id, lp.label, GBDTModel.predict(lp.fs, wk_learners, num_label)))
   }
 
   /**
@@ -68,7 +68,7 @@ class GBDTModel(impurity: Impurity,
 /**
   * Static methods for [[GBDTModel]].
   */
-private[gbdt] object GBDTModel {
+object GBDTModel {
 
   /**
     * Method to predict value for single data point using the model trained.
@@ -77,7 +77,7 @@ private[gbdt] object GBDTModel {
     * @param n_label number of different labels
     * @return the prediction for specified data point
     */
-  def predict(fs: SparseVector[Double],
+  private[gbdt] def predict(fs: SparseVector[Double],
               wk_learners: Array[TreeNode],
               n_label: Int): Double = {
     val preds = Array.fill[Double](n_label)(0.0)
@@ -97,7 +97,7 @@ private[gbdt] object GBDTModel {
     * @param root root of CART model
     * @return the prediction for specified data point
     */
-  def predict(fs: SparseVector[Double], root: TreeNode): Double = {
+  private[gbdt] def predict(fs: SparseVector[Double], root: TreeNode): Double = {
     var node = root
     while (!node.is_leaf) {
       if (fs(node.split.get.id_f) < node.split.get.threshold) {
@@ -107,5 +107,37 @@ private[gbdt] object GBDTModel {
       }
     }
     node.predict
+  }
+
+  /**
+    * Method to load GBDT model from disk.
+    *
+    * @param sc Spark Context
+    * @param fp path of GBDT model on disk
+    * @return an instance of [[GBDTModel]]
+    */
+  def load(sc: SparkContext, fp: String): GBDTModel = {
+    sc.objectFile[GBDTModel](fp).take(1)(0)
+  }
+
+  /**
+    * Method to print structure of CART model.
+    *
+    * @param root root of CART model
+    */
+  def printStructure(root: TreeNode): Unit = {
+    val prefix = Array.fill[String](root.depth)("|---").mkString("")
+    println(s"$prefix$root")
+
+    root.left_child match {
+      case Some(l_child: TreeNode) =>
+        printStructure(l_child)
+      case None => // RETURN
+    }
+    root.right_child match {
+      case Some(r_child: TreeNode) =>
+        printStructure(r_child)
+      case None => // RETURN
+    }
   }
 }

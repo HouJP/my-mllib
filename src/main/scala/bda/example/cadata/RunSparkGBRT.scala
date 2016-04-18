@@ -29,8 +29,8 @@ object RunSparkGBRT {
 
     val data_dir: String = input_dir + "regression/cadata/"
 
-    val train = Points.readLibSVMFile(sc, data_dir + "cadata.train")
-    val test = Points.readLibSVMFile(sc, data_dir + "cadata.test")
+    val train = Points.readLibSVMFile(sc, data_dir + "cadata.train", false)
+    val test = Points.readLibSVMFile(sc, data_dir + "cadata.test", false)
 
     train.cache()
     test.cache()

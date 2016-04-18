@@ -27,8 +27,8 @@ object RunSparkRandomForest {
     val sc = new SparkContext(conf)
 
     val data_dir: String = input_dir + "classification/dna/"
-    val train = Points.readLibSVMFile(sc, data_dir + "dna.scale")
-    val test = Points.readLibSVMFile(sc, data_dir + "dna.scale.t")
+    val train = Points.readLibSVMFile(sc, data_dir + "dna.scale", true)
+    val test = Points.readLibSVMFile(sc, data_dir + "dna.scale.t", true)
 
     val impurity: String = "Gini"
     val max_depth: Int = 10

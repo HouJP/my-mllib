@@ -2,6 +2,7 @@ package bda.spark.model.tree.rf
 
 import bda.common.obj.LabeledPoint
 import bda.common.Logging
+import bda.common.util.{Timer, Msg}
 import bda.spark.model.tree.TreeNode
 import bda.spark.model.tree.cart.CART
 import org.apache.spark.rdd.RDD
@@ -11,7 +12,7 @@ import scala.collection.mutable.ArrayBuffer
 /**
   * External interface of Random Forest on spark.
   */
-object RandomForest {
+object RandomForest extends Logging {
 
   /**
     * An adapter of training a random forest model.
@@ -39,7 +40,20 @@ object RandomForest {
             col_rate: Double = 0.6,
             num_trees: Int = 20): RandomForestModel = {
 
-    new RandomForestTrainer(impurity,
+    val msg = Msg("n(train_data)" -> train_data.count(),
+      "impurity" -> impurity,
+      "max_depth" -> max_depth,
+      "max_bins" -> max_bins,
+      "bin_samples" -> bin_samples,
+      "min_node_size" -> min_node_size,
+      "min_info_gain" -> min_info_gain,
+      "row_rate" -> row_rate,
+      "col_rate" -> col_rate,
+      "num_trees" -> num_trees
+    )
+    logInfo(msg.toString)
+
+    new RandomForest(impurity,
       max_depth,
       max_bins,
       bin_samples,
@@ -64,7 +78,7 @@ object RandomForest {
   * @param col_rate sample ratio of features
   * @param num_trees number of decision trees
   */
-private[tree] class RandomForestTrainer(impurity: String,
+private[tree] class RandomForest(impurity: String,
                                         max_depth: Int,
                                         max_bins: Int,
                                         bin_samples: Int,
@@ -82,6 +96,7 @@ private[tree] class RandomForestTrainer(impurity: String,
     * @return a [[bda.spark.model.tree.rf.RandomForestModel]] instance which can be used to predict.
     */
   def train(train_data: RDD[LabeledPoint]): RandomForestModel = {
+    val timer = new Timer()
 
     val wk_learners = new ArrayBuffer[TreeNode]()
 
@@ -97,8 +112,12 @@ private[tree] class RandomForestTrainer(impurity: String,
         col_rate).train(train_data)
       wk_learners += wl.root
 
+      logInfo(s"Random Forest Model tree#${ind + 1} training done")
+
       ind += 1
     }
+
+    logInfo(s"Random Forest Model training done, cost time ${timer.cost()}ms")
 
     new RandomForestModel(wk_learners.toArray,
       impurity,

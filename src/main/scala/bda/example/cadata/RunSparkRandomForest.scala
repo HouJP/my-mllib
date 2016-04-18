@@ -36,8 +36,8 @@ object RunSparkRandomForest {
     val sc = new SparkContext(conf)
     sc.setCheckpointDir(tmp_dir)
 
-    val train = Points.readLibSVMFile(sc, data_dir + "cadata.train")
-    val test = Points.readLibSVMFile(sc, data_dir + "cadata.test")
+    val train = Points.readLibSVMFile(sc, data_dir + "cadata.train", false)
+    val test = Points.readLibSVMFile(sc, data_dir + "cadata.test", false)
 
     train.cache()
     test.cache()
@@ -55,11 +55,11 @@ object RunSparkRandomForest {
       num_trees)
 
     // Error of training data set
-    val train_preds = rf_model.predict(train)
+    val train_preds = rf_model.predict(train).map(e => (e._2, e._3))
     println(s"Train RMSE: ${RMSE(train_preds)}")
 
     // Error of testing data set
-    val test_preds = rf_model.predict(test)
+    val test_preds = rf_model.predict(test).map(e => (e._2, e._3))
     println(s"Test RMSE: ${RMSE(test_preds)}")
   }
 }

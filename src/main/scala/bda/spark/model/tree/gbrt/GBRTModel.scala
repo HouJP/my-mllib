@@ -28,7 +28,7 @@ class GBRTModel(impurity: String,
                 min_info_gain: Double,
                 num_round: Int,
                 learn_rate: Double,
-                wk_learners: Array[TreeNode]) {
+                wk_learners: Array[TreeNode]) extends Serializable {
 
   /**
     * Method to predict value for given data point using the model trained.
@@ -36,11 +36,11 @@ class GBRTModel(impurity: String,
     * @param input test data set which represented as a RDD of [[LabeledPoint]]
     * @return a RDD stored predictions.
     */
-  def predict(input: RDD[LabeledPoint]): RDD[(Double, Double)] = {
+  def predict(input: RDD[LabeledPoint]): RDD[(String, Double, Double)] = {
     val learn_rate = this.learn_rate
     val wk_learners = this.wk_learners
 
-    input.map(lp => (lp.label, GBRTModel.predict(lp.fs, wk_learners, learn_rate)))
+    input.map(lp => (lp.id, lp.label, GBRTModel.predict(lp.fs, wk_learners, learn_rate)))
   }
 
   /**
@@ -68,7 +68,17 @@ class GBRTModel(impurity: String,
 /**
   * Static methods for [[GBRTModel]].
   */
-private[gbrt] object GBRTModel {
+object GBRTModel {
+  /**
+    * Method to load GBRT model from disk.
+    *
+    * @param sc Spark Context
+    * @param fp path of GBDT model on disk
+    * @return an instance of [[GBRTModel]]
+    */
+  def load(sc: SparkContext, fp: String): GBRTModel = {
+    sc.objectFile[GBRTModel](fp).take(1)(0)
+  }
 
   /**
     * Method to predict value for single data point using the model trained.

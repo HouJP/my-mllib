@@ -31,7 +31,7 @@ class RandomForestModel(wk_learners: Array[TreeNode],
                         min_info_gain: Double,
                         row_rate: Double,
                         col_rate: Double,
-                        num_trees: Int) {
+                        num_trees: Int) extends Serializable {
 
   /**
     * Method to predict value for given data point using the model trained.
@@ -40,11 +40,11 @@ class RandomForestModel(wk_learners: Array[TreeNode],
 
     * @return a RDD stored predictions.
     */
-  def predict(input: RDD[LabeledPoint]): RDD[(Double, Double)] = {
+  def predict(input: RDD[LabeledPoint]): RDD[(String, Double, Double)] = {
     val impurity = Impurities.fromString(this.impurity)
     val wk_learners = this.wk_learners
 
-    input.map(lp => (lp.label, RandomForestModel.predict(lp.fs, impurity, wk_learners)))
+    input.map(lp => (lp.id, lp.label, RandomForestModel.predict(lp.fs, impurity, wk_learners)))
   }
 
   /**
@@ -73,7 +73,18 @@ class RandomForestModel(wk_learners: Array[TreeNode],
 /**
   * Static methods for [[RandomForestModel]].
   */
-private[rf] object RandomForestModel {
+object RandomForestModel {
+
+  /**
+    * Method to load Random Forest model from disk.
+    *
+    * @param sc Spark Context
+    * @param fp path of Random Forest model on disk
+    * @return an instance of [[RandomForestModel]]
+    */
+  def load(sc: SparkContext, fp: String): RandomForestModel = {
+    sc.objectFile[RandomForestModel](fp).take(1)(0)
+  }
 
   /**
     * Method to predict value for single data point using the model trained.

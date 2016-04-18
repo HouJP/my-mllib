@@ -8,7 +8,8 @@ import org.apache.spark.rdd.RDD
   * @param y_K        labels of K classes of data point
   * @param binned_fs  binned features of a data point
   */
-private[gbdt] case class CARTPoint(y_K: Array[Double],
+private[gbdt] case class CARTPoint(id: String,
+                                   y_K: Array[Double],
                                    binned_fs: Array[Int]) extends Serializable {
 
   /**
@@ -17,7 +18,7 @@ private[gbdt] case class CARTPoint(y_K: Array[Double],
     * @return an instance of [[String]] which represent the point
     */
   override def toString = {
-    s"y_K(${y_K.mkString(",")}),binned_fs(${binned_fs.mkString(",")})"
+    s"id($id),y_K(${y_K.mkString(",")}),binned_fs(${binned_fs.zipWithIndex.mkString(",")})"
   }
 }
 
@@ -57,6 +58,6 @@ private[gbdt] object CARTPoint {
           case false => 0.0 - p
         }
     }
-    new CARTPoint(y_K, gbdt_p.binned_fs)
+    new CARTPoint(gbdt_p.id, y_K, gbdt_p.binned_fs)
   }
 }

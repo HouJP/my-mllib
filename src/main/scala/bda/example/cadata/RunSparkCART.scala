@@ -35,8 +35,8 @@ object RunSparkCART {
 
     val sc = new SparkContext(conf)
 
-    val train = Points.readLibSVMFile(sc, data_dir + "cadata.train")
-    val test = Points.readLibSVMFile(sc, data_dir + "cadata.test")
+    val train = Points.readLibSVMFile(sc, data_dir + "cadata.train", false)
+    val test = Points.readLibSVMFile(sc, data_dir + "cadata.test", false)
 
     train.cache()
     test.cache()
@@ -53,11 +53,11 @@ object RunSparkCART {
     cart_model.printStructure()
 
     // Error of training data set
-    val train_preds = cart_model.predict(train)
+    val train_preds = cart_model.predict(train).map(e => (e._2, e._3))
     println(s"Train RMSE: ${RMSE(train_preds)}")
 
     // Error of testing data set
-    val test_preds = cart_model.predict(test)
+    val test_preds = cart_model.predict(test).map(e => (e._2, e._3))
     println(s"Test RMSE: ${RMSE(test_preds)}")
   }
 }

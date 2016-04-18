@@ -1,6 +1,7 @@
 package bda.example.a1a
 
 import bda.example._
+import bda.spark.evaluate.Classification
 import bda.spark.model.tree.gbdt.GBDT
 import bda.spark.reader.Points
 import org.apache.log4j.{Level, Logger}
@@ -20,22 +21,22 @@ object RunSparkGBDT {
     Logger.getLogger("aka").setLevel(Level.WARN)
 
     val conf = new SparkConf()
-      .setMaster("local[4]")
+      .setMaster("local")
       .setAppName(s"Spark GBDT Training of a1a dataset")
       .set("spark.hadoop.validateOutputSpecs", "false")
     val sc = new SparkContext(conf)
 
-    val data_dir: String = input_dir + "classification/a1a/"
-    val train = Points.readLibSVMFile(sc, data_dir + "a1a.nnl")
-    val test = Points.readLibSVMFile(sc, data_dir + "a1a.t.nnl")
+    val data_dir: String = input_dir + "classification/"
+    val train = Points.readLibSVMFile(sc, data_dir + "a1a", is_class = true)
+    val test = Points.readLibSVMFile(sc, data_dir + "a1a.t", is_class = true)
 
     val impurity: String = "Variance"
     val max_depth: Int = 10
-    val min_node_size: Int = 20
+    val min_node_size: Int = 15
     val min_info_gain: Double = 1e-6
     val max_bins: Int = 32
     val bin_samples: Int = 10000
-    val num_round: Int = 3
+    val num_round: Int = 5
 
     val gbdt_model = GBDT.train(train,
       impurity,
@@ -48,12 +49,13 @@ object RunSparkGBDT {
 
     // Error of training data set
     val train_preds = gbdt_model.predict(train)
-    val train_err = train_preds.filter(r => r._1 != r._2).count().toDouble / test.count()
-    println("Train Error = " + train_err)
+    val train_err = train_preds.filter(r => r._2 != r._3).count().toDouble / train.count()
+    println(s"Train Error($train_err)")
+
 
     // Error of testing data set
     val test_preds = gbdt_model.predict(test)
-    val test_err = test_preds.filter(r => r._1 != r._2).count().toDouble / test.count()
-    println("Test Error = " + test_err)
+    val test_err = test_preds.filter(r => r._2 != r._3).count().toDouble / test.count()
+    println(s"Test Error($test_err)")
   }
 }

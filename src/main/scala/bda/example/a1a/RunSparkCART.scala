@@ -34,8 +34,8 @@ object RunSparkCART {
 
     val sc = new SparkContext(conf)
 
-    val train = Points.readLibSVMFile(sc, data_dir + "a1a")
-    val test = Points.readLibSVMFile(sc, data_dir + "a1a.t")
+    val train = Points.readLibSVMFile(sc, data_dir + "a1a", true)
+    val test = Points.readLibSVMFile(sc, data_dir + "a1a.t", true)
 
     train.cache()
     test.cache()

@@ -12,22 +12,23 @@ import org.apache.spark.rdd.RDD
 object Points extends Logging {
 
   /**
-   * Parse LabeledPoint from libSVM format RDD Strings.
-   * Each line is a labeled point (libsvm datasets do not have unlabeled data):
-   * label fid:v fid:v ...
-   *
-   * where
-   * - Label is {-1, +1} for binary classification, and {0, ..., K-1} for
-   * multi-classification.
-   * - Fid is start from 1, which should subtract 1 to 0-started.
-   * - v is a Double
-   *
-   * @note User have to specify the feature number ahead
-   *
-   * @param pt  Input file path
-   */
+    * Parse LabeledPoint from libSVM format RDD Strings.
+    * Each line is a labeled point (libsvm datasets do not have unlabeled data):
+    * label fid:v fid:v ...
+    *
+    * where
+    * - Label is {-1, +1} for binary classification, and {0, ..., K-1} for
+    * multi-classification.
+    * - Fid is start from 1, which should subtract 1 to 0-started.
+    * - v is a Double
+    *
+    * @note User have to specify the feature number ahead
+    * @param pt       Input file path
+    * @param is_class whether libsvm file is used for classification
+    */
   def readLibSVMFile(sc: SparkContext,
-                     pt: String): RDD[LabeledPoint] = {
+                     pt: String,
+                     is_class: Boolean): RDD[LabeledPoint] = {
     // parse the LibSVM file
     val rds: RDD[(Double, Array[(Int, Double)])] = sc.textFile(pt).map { ln =>
       val items = ln.split(" ")
@@ -46,8 +47,8 @@ object Points extends Logging {
     logInfo(s"n(label)=$n_label, n(feature)=$n_feature")
 
     // transform to labeled points, and adjust label
-    rds.map { case (label, fvs) =>
-      val new_label: Double = if (n_label > 2) {
+    rds.zipWithIndex().map { case ((label, fvs), id) =>
+      val new_label: Double = if (n_label > 2 && is_class) {
         // for multi-class, decrease label to [0, C-1)
         label - 1
       } else {
@@ -55,7 +56,7 @@ object Points extends Logging {
         if (label < 0) 0.0 else label
       }
       val fs = SparseVector(fvs)
-      LabeledPoint(new_label, fs)
+      new LabeledPoint(id.toString, new_label, fs)
     }
   }
 }

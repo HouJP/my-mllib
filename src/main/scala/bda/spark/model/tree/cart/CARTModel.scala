@@ -38,9 +38,9 @@ class CARTModel(val root: TreeNode,
     * @param input test data set which represented as a RDD of [[LabeledPoint]]
     * @return a RDD stored predictions.
     */
-  def predict(input: RDD[LabeledPoint]): RDD[(Double, Double)] = {
+  def predict(input: RDD[LabeledPoint]): RDD[(String, Double, Double)] = {
     val root = this.root
-    input.map(lp => (lp.label, CARTModel.predict(lp.fs, root)))
+    input.map(lp => (lp.id, lp.label, CARTModel.predict(lp.fs, root)))
   }
 
   /**
@@ -60,7 +60,7 @@ class CARTModel(val root: TreeNode,
     * @param pt path of the model location on disk
     */
   def save(sc: SparkContext, pt: String): Unit = {
-    val model_rdd = sc.makeRDD(Seq(this))
+    val model_rdd: RDD[CARTModel] = sc.makeRDD(Seq(this))
     model_rdd.saveAsObjectFile(pt)
   }
 
@@ -94,6 +94,17 @@ object CARTModel {
       }
     }
     node.predict
+  }
+
+  /**
+    * Method to load CART model from disk.
+    *
+    * @param sc Spark Context
+    * @param fp path of CART model on disk
+    * @return an instance of [[CARTModel]]
+    */
+  def load(sc: SparkContext, fp: String): CARTModel = {
+    sc.objectFile[CARTModel](fp).take(1)(0)
   }
 
   /**

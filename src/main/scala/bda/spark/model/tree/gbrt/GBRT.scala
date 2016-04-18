@@ -1,7 +1,8 @@
 package bda.spark.model.tree.gbrt
 
+import bda.common.Logging
 import bda.common.obj.LabeledPoint
-import bda.spark.evaluate.Regression._
+import bda.common.util.{Timer, Msg}
 import bda.spark.model.tree.TreeNode
 import bda.spark.model.tree.cart.{CARTModel, CART}
 import org.apache.spark.rdd.RDD
@@ -10,8 +11,10 @@ import scala.collection.mutable
 
 /**
   * External interface of GBRT(Gradient Boosting Regression Trees) on spark.
+  * Reference:
+  *    Friedman, J. H. (2000). Greedy Function Approximation : A Gradient Boosting Machine. Annals of Statistics.
   */
-object GBRT {
+object GBRT extends Logging {
 
   /**
     * An adapter for training a GBRT model.
@@ -37,6 +40,18 @@ object GBRT {
             min_info_gain: Double = 1e-6,
             num_round: Int = 10,
             learn_rate: Double = 0.02): GBRTModel = {
+
+    val msg = Msg("n(train_data)" -> train_data.count(),
+      "impurity" -> impurity,
+      "max_depth" -> max_depth,
+      "max_bins" -> max_bins,
+      "bin_samples" -> bin_samples,
+      "min_node_size" -> min_node_size,
+      "min_info_gain" -> min_info_gain,
+      "num_round" -> num_round,
+      "learn_rate" -> learn_rate
+    )
+    logInfo(msg.toString)
 
     new GBRT(impurity,
       max_depth,
@@ -68,7 +83,7 @@ class GBRT(impurity: String,
            min_node_size: Int,
            min_info_gain: Double,
            num_round: Int,
-           learn_rate: Double) {
+           learn_rate: Double) extends Logging {
 
   /**
     * Method to train a GBRT model based on training data set.
@@ -77,6 +92,7 @@ class GBRT(impurity: String,
     * @return an instance of [[GBRTModel]]
     */
   def train(train_data: RDD[LabeledPoint]): GBRTModel = {
+    val timer = new Timer()
 
     // Build container for roots
     val wk_learners = mutable.ArrayBuffer[TreeNode]()
@@ -99,6 +115,8 @@ class GBRT(impurity: String,
       min_info_gain,
       1.0, 1.0).train(cart_ps)
     wk_learners += wl0.root
+
+    logInfo("GBRT Model round#1 training done")
 
     var iter = 1
     while (iter < num_round) {
@@ -135,8 +153,11 @@ class GBRT(impurity: String,
         1.0, 1.0).train(cart_ps)
       wk_learners += wl.root
 
+      logInfo(s"GBRT Model round#${iter + 1} training done")
       iter += 1
     }
+
+    logInfo(s"GBRT Model training done, cost time ${timer.cost()}ms")
 
     new GBRTModel(this.impurity,
       max_depth,

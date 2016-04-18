@@ -5,21 +5,20 @@
 
 ****
 
-### Contents
-*	[Project Introduction](#intro)
-*	[Direction for Use](#usage)
-*	[Algorithm Testing](#test)
-*	[Data Specification](#data)
-*	[Version Updating](#version)
+### 目录
+*	[项目介绍](#intro)
+*	[使用说明](#usage)
+*	[算法测试](#test)
+*	[数据说明](#data)
+*	[版本更新](#version)
 
 ****
 
-###<a name="intro">Project Introduction</a>
+###<a name="intro">项目介绍</a>
 
+本项目基于Spark分布式计算框架，实现了目前流行的机器学习算法(分布式版本)。
 
-The project implemented some machine learning algorithms on spark which is written in scala and it also included standalone implementations of these algorithms.
-
-You can find these ML algorithms up to now:
+当前包含的机器学习算法如下：
 
 *	Classification And Regression Trees （used for classification and regression）
 *	Gradient Boosting Decision Trees (used for multiple classification)
@@ -28,119 +27,107 @@ You can find these ML algorithms up to now:
 
 ****
 
-###<a name="usage">Direction for Use</a>
+###<a name="usage">使用说明</a>
 
 TODO
 
 ****
 
-###<a name="test">Algorithm Testing</a>
+###<a name="test">算法测试</a>
 
-#### bda.local.model.tree.GradientBoost
-
-* Enviroment
-	* CPU: 1.3 GHz Intel Core i5
-	* Memory: 4 GB 1600 MHz DDR3
+* 测试环境
+	* 集群大小: 1 * Master + 5 * Worker
+	* 操作系统: CentOS release 6.6 (Final)
+	* 单机内存: 132G
+	* 单机硬盘: 1.8T
 	
-* DataSet
-	* Name: cadata
-	* Rate: 70%-training, 30%-testing
-	
-* Fixed parameters:
-	* xgboost: gamma = 0, max_delata_step = 0, subsample = 1, colsample_byree = 1, lambda = 1, alpha = 0, nthread = 10
-	* GradientBoost: data_sample_rate = 0.2, max_data_sample = 10000
-		
-| Algorithm | num_iter | eta | max_depth | min_child_weight | total_time | train_RMSE | test_RMSE |
-| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
-| xgboost 	| 100 | 0.01 | 15 | 10 | 4s | 97536.96 | 102027.12 |
-| 			| 300 | 0.01 | 15 | 10 | 14s | 31399.54 | 49394.50 |
-| 			| 500 | 0.01 | 15 | 10 | 23s | 23296.80 | 47144.61 |
-| 			| 500 | 0.01 | 20 | 20 | 26s | 28251.16 | **46656.16** |
-| 			| 600 | 0.01 | 20 | 20 | 31s | 27059.08 | 46704.55 |
+#### CART算法
 
-| Algorithm | num_iter | learn_rate | max_depth | min_node_size | ave_iter_cost_time | train_RMSE | test_RMSE |
-| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
-| GradientBoost 	| 100 | 0.01 | 15 | 10 | 857ms | 46993.31 | 60005.90 |
-| 					 	| 500 | 0.01 | 15 | 10 | 761ms | 16767.86 | 47326.49 |
-|						| 1000 | 0.01 | 15 | 10 | 798ms | 12343.36 | **47144.03** |
-|						| 100 | 0.01 | 15 | 20 | 913ms | 36081.40 | 60252.03 |
-|						| 100 | 0.01 | 20 | 20 | 1144ms | 37641.07 | 59462.60 |
-
-#### bda.local.model.tree.DecisionTree
-
-* Enviroment
-	* CPU: 1.3 GHz Intel Core i5
-	* Memory: 4 GB 1600 MHz DDR3
-	
-* DataSet
-	* Name: cadata
-	* Rate: 70%-training, 30%-testing
-
-| Algorithm | max_depth | min_samples_leaf | cost_time | train_RMSE | test_RMSE |
+| 算法 | 数据集 | 训练集评测 | 测试集评测 | 时间 | 参数 |
 | ---- | ---- | ---- | ---- | ---- | ---- |
-| sklearn.tree.DecisionTreeRegressor 	| 15 | 10 | - | 45111.32 | 61751.50 |
-|										| 15 | 20 | - | 50701.13 | 58233.37 |
-|										| 20 | 20 | _ | 50758.53 | 59627.13 |
-| | | | | | |
-| DecisionTree 	| 15 | 10 | - | 32438.77 | 65735.05 |
-|						| 15 | 20 | - | 39596.32 | 62751.22 |
-|						| 20 | 20 | - | 37900.60 | 63104.04 |
+| tree.cart.CART | cadata(3:1) | RMSE(57515.27) | RMSE(60845.42) | 9128ms | impurity(Variance),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(15),min_info_gain(1e-6) |
+| tree.cart.CART | cadata(3:1) | RMSE(52695.06) | RMSE(59125.73) | 9128ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6) |
+| tree.cart.CART | a1a/a1a.t | Acc(0.8274),Pre(0.6453),Rec(0.6633),Auc(0.7721) | Acc(0.8189),Pre(0.6201),Rec(0.6377),Auc(0.7570) | 6163ms | impurity(Gini),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(15),min_info_gain(1e-6) |
+| tree.cart.CART | a1a/a1a.t | Acc(0.8399),Pre(0.6994),Rec(0.6127),Auc(0.7634) | Acc(0.8167),Pre(0.6368),Rec(0.5539),Auc(0.7269) | 6163ms | impurity(Gini),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6) |
+
+
+#### GBDT算法
+
+| 算法 | 数据集 | 训练集评测 | 测试集评测 | 时间 | 参数 |
+| ---- | ---- | ---- | ---- | ---- | ---- |
+| tree.gbdt.GBDT | a1a/a1a.t| Acc(0.8411),Pre(0.7414),Rec(0.5443),Auc(0.7412) | Acc(0.8190),Pre(0.6551),Rec(0.5231),Auc(0.7179)  | 7458ms | impurity(Variance),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(15),min_info_gain(1e-6),num_round(1) |
+| tree.gbdt.GBDT | a1a/a1a.t| Acc(0.8717),Pre(0.7981),Rec(0.6405),Auc(0.7938) | Acc(0.8209,Pre(0.6481),Rec(0.5586),Auc(0.7313)  | 10262ms | impurity(Variance),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(15),min_info_gain(1e-6),num_round(2) |
+| tree.gbdt.GBDT | a1a/a1a.t| Acc(0.8903),Pre(0.8174),Rec(0.7139),Auc(0.8309) | Acc(0.8226),Pre(0.6385),Rec(0.6050),Auc(0.7483)  | 13023ms | impurity(Variance),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(15),min_info_gain(1e-6),num_round(3) |
+| tree.gbdt.GBDT | a1a/a1a.t| Acc(0.9539),Pre(0.9147),Rec(0.8962),Auc(0.9345) | Acc(0.8135),Pre(0.6197),Rec(0.5811),Auc(0.7341)  | 25707ms | impurity(Variance),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(15),min_info_gain(1e-6),num_round(10) |
+
+
+#### GBRT算法
+
+| 算法 | 数据集 | 训练集评测 | 测试集评测 | 时间 | 参数 |
+| ---- | ---- | ---- | ---- | ---- | ---- |
+| tree.gbrt.GBRT | cadata(3:1) | RMSE(53397.68) | RMSE(60305.92) | 35431ms | impurity(Variance),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(15),min_info_gain(1e-6),num_round(10),learn_rate(0.02) |
+| tree.gbrt.GBRT | cadata(3:1) | RMSE(44996.86) | RMSE(57992.25) | 52898ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),num_round(10),learn_rate(0.02) |
+| tree.gbrt.GBRT | cadata(3:1) | RMSE(37797.63) | RMSE(57002.89) | 434537ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),num_round(50),learn_rate(0.02) |
+| tree.gbrt.GBRT | cadata(3:1) | RMSE(33603.60) | RMSE(58074.78) | 1057077ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),num_round(100),learn_rate(0.02) |
+
+#### RandomForest算法
+
+| 算法 | 数据集 | 训练集评测 | 测试集评测 | 时间 | 参数 |
+| ---- | ---- | ---- | ---- | ---- | ---- |
+| tree.rf.RandomForest | cadata(3:1) | RMSE(53682.94) | RMSE(56607.57) | 42313ms | impurity(Variance),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(15),min_info_gain(1e-6),row_rate(0.6),col_rate(0.6),num_trees(20) |
+| tree.rf.RandomForest | cadata(3:1) | RMSE(48106.61) | RMSE(53945.51) | 58230ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),row_rate(0.6),col_rate(0.6),num_trees(20) |
+| tree.rf.RandomForest | a1a/a1a.t | Acc(0.8436),Pre(0.7209),Rec(0.5949),Auc(0.7599) | Acc(0.8281),Pre(0.6714),Rec(0.5590),Auc(0.7362) | 40484ms | impurity(Gini),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(15),min_info_gain(1e-6),row_rate(0.6),col_rate(0.6),num_trees(20) |
+| tree.rf.RandomForest | a1a/a1a.t | Acc(0.8530),Pre(0.7331),Rec(0.6329),Auc(0.7789) | Acc(0.8271),Pre(0.6594),Rec(0.5818),Auc(0.7433) | 44227ms | impurity(Gini),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),row_rate(0.6),col_rate(0.6),num_trees(20) |
 
 
 ****
 
-###<a name="data">Data Specification</a>
+###<a name="data">数据说明</a>
 
-#### cadata
-*	Type: regression
-*	Source: [StatLib/houses.zip](http://lib.stat.cmu.edu/datasets/houses.zip)
-*	Homepage: [StatLib](http://lib.stat.cmu.edu/datasets/)
-*	Size: 4.6M
-*	\# of data: 20,640
-*	\# of features: 8
-*	Directory: $project/data/cadata
+| Name | Type | Size | \# of classes | \# of data | \# of features | Directory | Source |
+| ---- | ---- | ---- | ---- | ---- | ---- | ---- | ---- |  
+| cadata | regression | 4.6M | - | 20,640 | 8 | project_dir/data/regression | [Link](https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/regression.html#cadata) |
+| a1a/a1a.t | classification | 112K/2.1M | 2| 2,265/30,296 | 123 | project_dir/data/classification | [Link](https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html#a1a) |
 
 ****
 
 ###<a name="version">Version Updating</a>
+*	04/15/2016
+	*	修改weighted——impurity的计算方式：如果左/右孩子样本点个数小于节点最小尺寸，则将WeightedImpurity置为MaxDouble，防止左/右孩子样本点个数小于节点最小尺寸且WeightedImpurity小于MinInfoGain时，阻碍节点分裂。
 
 *	04/11/2016
-	*	finished GBDT(Gradient Boosting Decision Trees) on Spark, used for multiple classification.
+	*	完成Spark版本的GBDT(Gradient Boosting Decision Trees)算法，用于多分类。
 
 *	03/09/2016
-	*	finished CART(Classification And Regression Trees), used gini for classification and variance for regression.
+	*	完成CART(Classification And Regression Trees)，可以用作分类(Gini)和回归(Variance)。
+	
 *	12/31/2015
-	* 	changed implementation of standalone decision tree algorithm (use bins) which made tree algorithms run faster.
-	*	implemented random forest algorithm of standalone/distributed mode.
+	*	更改单机决策树的实现方法(使用分箱)
+	*	实现随机森林
 
 *	12/01/2015
-	*	changed implementation in distributed decision tree algorithm (use bins).
-	*	implemented bda.spark.model.tree.DecisionTree and bda.spark.model.tree.GradientBoost.
+	*	改变分布式版本决策树的实现方法(使用分箱)
+	*	实现bda.spark.model.tree.DecisionTree and bda.spark.model.tree.GradientBoost
 
 *	10/15/2015
-	*	fixed StackOverflowError when number of iteration is too large (>300).
-	*	evaluate performance of bda.spark.ml.GBoost.
-	
+	*	修正StackOverflowError(当迭代次数>300时)
+	*	测试bda.spark.ml.GBoost
+		
 *	10/14/2015
-	*	implement gbdt algorithm running on spark
-	*	issues
-		*	meet StackOverflowError when number of iteration is too large.
+	*	实现GBDT的spark版本
+	*	问题
+		*	当迭代次数很大时，报StackOverflowError
 		
 *	09/29/2015
-	*	use xgboost to generate baseline for performance evaluation
+	*	使用xgboost作为baseline
 
 *	09/27/2015
-	* 	implement gbdt algorithm running on local
+	*	实现单机版本GBDT
 
 *	09/25/2015
-	*	use sklearn.tree.DecisionTreeRegressor to generate baseline for performance evaluation
-	*	add code comments for decision tree
+	*	使用sklearn.tree.DecisionTreeRegressor作为baseline
 
 *	09/23/2015
-	*	implementations
-		*	implement decision tree which can be used to rain and predict and running on local
-	*	issues
-		* 	only for regression
-		*	model can not be saved	
+	*	实现单机版本决策树(回归)
 
 ****

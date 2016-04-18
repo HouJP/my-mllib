@@ -6,6 +6,7 @@ package bda
 package object example {
   /** directory of input files */
   val input_dir = "/Users/hugh_627/GitHub/my-mllib/data/"
+  //val input_dir = "/home/houjp/my-mllib/data/"
 
   /** directory of temporal files */
   val tmp_dir = "/Users/hugh_627/Desktop/tmp/"
