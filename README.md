@@ -63,12 +63,13 @@ TODO
 
 #### GBRT算法
 
+
 | 算法 | 数据集 | 训练集评测 | 测试集评测 | 时间 | 参数 |
 | ---- | ---- | ---- | ---- | ---- | ---- |
 | tree.gbrt.GBRT | cadata(3:1) | RMSE(53397.68) | RMSE(60305.92) | 35431ms | impurity(Variance),max_depth(10),max_bins(32),bin_samples(10000),min_node_size(15),min_info_gain(1e-6),num_round(10),learn_rate(0.02) |
-| tree.gbrt.GBRT | cadata(3:1) | RMSE(44996.86) | RMSE(57992.25) | 52898ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),num_round(10),learn_rate(0.02) |
-| tree.gbrt.GBRT | cadata(3:1) | RMSE(37797.63) | RMSE(57002.89) | 434537ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),num_round(50),learn_rate(0.02) |
-| tree.gbrt.GBRT | cadata(3:1) | RMSE(33603.60) | RMSE(58074.78) | 1057077ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),num_round(100),learn_rate(0.02) |
+| tree.gbrt.GBRT | cadata(3:1) | RMSE(45591.16) | RMSE(57616.83) | 52898ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),num_round(10),learn_rate(0.02) |
+| tree.gbrt.GBRT | cadata(3:1) | RMSE(38681.74) | RMSE(56180.71) | 434537ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),num_round(50),learn_rate(0.02) |
+| tree.gbrt.GBRT | cadata(3:1) | RMSE(33826.15) | RMSE(55246.31) | 1057077ms | impurity(Variance),max_depth(15),max_bins(32),bin_samples(10000),min_node_size(10),min_info_gain(1e-6),num_round(100),learn_rate(0.02) |
 
 #### RandomForest算法
 
