@@ -2,6 +2,8 @@ package bda.spark.model.tree.gbrt
 
 import bda.common.linalg.immutable.SparseVector
 import bda.common.obj.LabeledPoint
+import bda.spark.model.tree.TreeNode
+import bda.spark.model.tree.cart.CARTModel
 import org.apache.spark.rdd.RDD
 
 /**
@@ -40,6 +42,17 @@ private[gbrt] object GBRTPoint {
     lps.map {
       lp =>
         GBRTPoint(lp.label, 0, lp.fs)
+    }
+  }
+
+  def update(gbrt_ps: RDD[GBRTPoint], learn_rate: Double, root: TreeNode): RDD[GBRTPoint] = {
+    gbrt_ps.mapPartitions {
+      iter =>
+        iter.map {
+          p =>
+            val f = p.f + learn_rate * CARTModel.predict(p.fs, root)
+            GBRTPoint(p.label, f, p.fs)
+        }
     }
   }
 }

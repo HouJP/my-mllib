@@ -20,14 +20,6 @@ object RunSparkCART {
     Logger.getLogger("org").setLevel(Level.WARN)
     Logger.getLogger("aka").setLevel(Level.WARN)
 
-    val data_dir: String = input_dir + "regression/cadata/"
-    val impurity: String = "Variance"
-    val max_depth: Int = 10
-    val min_node_size: Int = 15
-    val min_info_gain: Double = 1e-6
-    val max_bins: Int = 32
-    val bin_samples: Int = 10000
-
     val conf = new SparkConf()
       .setMaster("local[4]")
       .setAppName(s"Spark CART Training of cadata dataset")
@@ -35,20 +27,21 @@ object RunSparkCART {
 
     val sc = new SparkContext(conf)
 
-    val train = Points.readLibSVMFile(sc, data_dir + "cadata.train", false)
-    val test = Points.readLibSVMFile(sc, data_dir + "cadata.test", false)
+    val data_dir: String = input_dir + "regression/"
+    val data = Points.readLibSVMFile(sc, data_dir + "/cadata", is_class = false)
+    val Array(train, test) = data.randomSplit(Array(0.75, 0.25))
 
     train.cache()
     test.cache()
 
     val cart_model = CART.train(
       train,
-      impurity,
-      max_depth,
-      max_bins,
-      bin_samples,
-      min_node_size,
-      min_info_gain)
+      impurity = "Variance",
+      max_depth = 15,
+      max_bins = 32,
+      bin_samples = 10000,
+      min_node_size = 10,
+      min_info_gain = 1e-6)
 
     cart_model.printStructure()
 

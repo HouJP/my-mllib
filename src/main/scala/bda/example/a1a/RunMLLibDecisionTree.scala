@@ -1,9 +1,10 @@
 package bda.example.a1a
 
 import bda.example._
+import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.mllib.tree.DecisionTree
+import org.apache.spark.mllib.tree.model.DecisionTreeModel
 import org.apache.spark.mllib.util.MLUtils
-import org.apache.spark.{SparkConf, SparkContext}
 
 object RunMLLibDecisionTree {
 
@@ -14,7 +15,7 @@ object RunMLLibDecisionTree {
       .set("spark.hadoop.validateOutputSpecs", "false")
     val sc = new SparkContext(conf)
 
-    val dir = input_dir + "classification/a1a/"
+    val dir = input_dir + "classification/"
     val train_pt = dir + "a1a.nnl"
     val test_pt = dir + "a1a.t.nnl"
     val model_pt = output_dir + "dt.model"
@@ -28,7 +29,7 @@ object RunMLLibDecisionTree {
     val numClasses = 2
     val categoricalFeaturesInfo = Map[Int, Int]()
     val impurity = "gini"
-    val maxDepth = 10
+    val maxDepth = 5
     val maxBins = 32
 
     val model = DecisionTree.trainClassifier(trainingData, numClasses, categoricalFeaturesInfo,
@@ -44,7 +45,7 @@ object RunMLLibDecisionTree {
     println("Learned classification tree model:\n" + model.toDebugString)
 
     // Save and load model
-    //model.save(sc, "target/tmp/myDecisionTreeClassificationModel")
-    //val sameModel = DecisionTreeModel.load(sc, "target/tmp/myDecisionTreeClassificationModel")
+    model.save(sc, "target/tmp/myDecisionTreeClassificationModel")
+    val sameModel = DecisionTreeModel.load(sc, "target/tmp/myDecisionTreeClassificationModel")
   }
 }

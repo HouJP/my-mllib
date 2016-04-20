@@ -27,16 +27,16 @@ object RunSparkGBRT {
     val sc = new SparkContext(conf)
     sc.setCheckpointDir(tmp_dir)
 
-    val data_dir: String = input_dir + "regression/cadata/"
-
-    val train = Points.readLibSVMFile(sc, data_dir + "cadata.train", false)
-    val test = Points.readLibSVMFile(sc, data_dir + "cadata.test", false)
+    val data_dir: String = input_dir + "regression/"
+    val data = Points.readLibSVMFile(sc, data_dir + "/cadata", is_class = false)
+    val Array(train, test) = data.randomSplit(Array(0.75, 0.25))
 
     train.cache()
     test.cache()
 
     val gbrt_model = GBRT.train(
       train,
+      Array(("test", test)),
       impurity = "Variance",
       max_depth = 15,
       max_bins = 32,
@@ -47,11 +47,11 @@ object RunSparkGBRT {
       learn_rate = 0.01)
 
     // Error of training data set
-    val train_preds = gbrt_model.predict(train)
+    val train_preds = gbrt_model.predict(train).map(e => (e._2, e._3))
     println(s"Train RMSE: ${RMSE(train_preds)}")
 
     // Error of testing data set
-    val test_preds = gbrt_model.predict(test)
+    val test_preds = gbrt_model.predict(test).map(e => (e._2, e._3))
     println(s"Test RMSE: ${RMSE(test_preds)}")
   }
 }

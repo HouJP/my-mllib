@@ -2,6 +2,7 @@ package bda.spark.runnable.tree.gbrt
 
 import bda.common.obj.LabeledPoint
 import org.apache.log4j.{Level, Logger}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkContext, SparkConf}
 import scopt.OptionParser
 import bda.spark.model.tree.gbrt.GBRT
@@ -17,6 +18,7 @@ object Train {
 
   /** command line parameters */
   case class Params(train_pt: String = "",
+                    valid_pt: String = "",
                     model_pt: String = "",
                     cp_pt: String = "",
                     impurity: String = "Variance",
@@ -40,6 +42,9 @@ object Train {
       opt[String]("train_pt").required()
         .text("input paths to the training dataset in LibSVM format")
         .action((x, c) => c.copy(train_pt = x))
+      opt[String]("valid_pt")
+        .text("input paths to the validation dataset in LibSVM format")
+        .action((x, c) => c.copy(valid_pt = x))
       opt[String]("model_pt").required()
         .text("directory of the GBRT model")
         .action((x, c) => c.copy(model_pt = x))
@@ -85,6 +90,7 @@ object Train {
           |   --num_round 10 \
           |   --learn_rate 0.02 \
           |   --train_pt ... \
+          |   --valid_pt ... \
           |   --model_pt ... \
           |   --cp_pt ...
         """.stripMargin)
@@ -105,9 +111,15 @@ object Train {
 
     // prepare training
     val train = sc.textFile(params.train_pt).map(LabeledPoint.parse).cache()
+    val watchlist = if (!params.valid_pt.isEmpty) {
+      Array(("valid", sc.textFile(params.valid_pt).map(LabeledPoint.parse).cache()))
+    } else {
+      Array[(String, RDD[LabeledPoint])]()
+    }
 
     val model = GBRT.train(
       train,
+      watchlist,
       params.impurity,
       params.max_depth,
       params.max_bins,
