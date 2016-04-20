@@ -30,6 +30,7 @@ object DecisionTree {
     * @param min_info_gain Minimum information gain while splitting, default is 1e-6.
     * @param row_rate sample ratio of train data set, default is 1.0.
     * @param col_rate sample ratio of features, default is 1.0.
+    * @param silent whether show logs of the algorithm.
     * @return a [[bda.local.model.tree.DecisionTreeModel]] instance.
     */
   def train(train_data: Seq[LabeledPoint],
@@ -42,7 +43,8 @@ object DecisionTree {
             min_node_size: Int = 15,
             min_info_gain: Double = 1e-6,
             row_rate: Double = 1.0,
-            col_rate: Double = 1.0): DecisionTreeModel = {
+            col_rate: Double = 1.0,
+            silent: Boolean = false): DecisionTreeModel = {
 
     new DecisionTreeTrainer(Impurity.fromString(impurity),
       Loss.fromString(loss),
@@ -52,7 +54,8 @@ object DecisionTree {
       min_node_size,
       min_info_gain,
       row_rate,
-      col_rate).train(train_data, valid_data)
+      col_rate,
+      silent).train(train_data, valid_data)
   }
 }
 
@@ -68,6 +71,7 @@ object DecisionTree {
   * @param min_info_gain Minimum information gain while spliting.
   * @param row_rate sample ratio of train data set.
   * @param col_rate sample ratio of features.
+  * @param silent whether to show logs of the algorithm.
   */
 private[tree] class DecisionTreeTrainer(impurity: Impurity,
                                         loss: Loss,
@@ -77,7 +81,8 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
                                         min_node_size: Int,
                                         min_info_gain: Double,
                                         row_rate: Double,
-                                        col_rate: Double) extends Logging {
+                                        col_rate: Double,
+                                        silent: Boolean) extends Logging {
 
   /** Impurity calculator */
   val impurity_calculator = impurity match {
@@ -92,12 +97,12 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
   }
 
   /**
-   * Method to train a decision tree model over training data.
-   *
-   * @param train_data Training data which represented as a Sequence of [[bda.common.obj.LabeledPoint]].
-   * @param valid_data Validation data which represented as a Sequence of [[bda.common.obj.LabeledPoint]] and can be none.
-   * @return A [[bda.local.model.tree.DecisionTreeModel]] instance.
-   */
+    * Method to train a decision tree model over training data.
+    *
+    * @param train_data Training data which represented as a Sequence of [[bda.common.obj.LabeledPoint]].
+    * @param valid_data Validation data which represented as a Sequence of [[bda.common.obj.LabeledPoint]] and can be none.
+    * @return A [[bda.local.model.tree.DecisionTreeModel]] instance.
+    */
   def train(train_data: Seq[LabeledPoint],
             valid_data: Seq[LabeledPoint]): DecisionTreeModel = {
 
@@ -126,7 +131,9 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
       "min_info_gain" -> min_info_gain,
       "row_rate" -> row_rate,
       "col_rate" -> col_rate)
-    logInfo(msg_para.toString)
+    if (!silent) {
+      logInfo(msg_para.toString)
+    }
 
     // find splits and bins for each feature
     val (splits, bins) = findSplitsBins(train_data,
@@ -219,8 +226,10 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
     if (null != valid_data) {
       msg.append("RMSE(valid)", valid_rmse)
     }
-    msg.append("time cost", time_cost)
-    logInfo(msg.toString)
+    msg.append("CostTime", s"${time_cost}ms")
+    if (!silent) {
+      logInfo(msg.toString)
+    }
 
     new DecisionTreeModel(root,
       num_fs,
@@ -238,11 +247,11 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
   }
 
   /**
-   * Method to get all the nodes in the queue.
-   *
-   * @param node_que The queue stored all splitting nodes.
-   * @return Array of [[bda.local.model.tree.DecisionTreeNode]].
-   */
+    * Method to get all the nodes in the queue.
+    *
+    * @param node_que The queue stored all splitting nodes.
+    * @return Array of [[bda.local.model.tree.DecisionTreeNode]].
+    */
   def findSplittingNodes(node_que: mutable.Queue[DecisionTreeNode]): Array[DecisionTreeNode] = {
     val leaves_builder = mutable.ArrayBuilder.make[DecisionTreeNode]
     while (node_que.nonEmpty) {
@@ -253,16 +262,16 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
 
 
   /**
-   * Method to find best splits and bins for each features.
-   *
-   * @param input Training data which represented as a RDD [[bda.common.obj.LabeledPoint]].
-   * @param new_bins Maximum possible number of bins.
-   * @param num_bins_all Number of bins for each features.
-   * @param num_features Number of features.
-   * @param num_examples Size of training data.
-   * @param min_samples Minimum possible number of samples.
-   * @return A tuple of [[bda.local.model.tree.DecisionTreeSplit]] and [[bda.local.model.tree.DecisionTreeBin]].
-   */
+    * Method to find best splits and bins for each features.
+    *
+    * @param input Training data which represented as a RDD [[bda.common.obj.LabeledPoint]].
+    * @param new_bins Maximum possible number of bins.
+    * @param num_bins_all Number of bins for each features.
+    * @param num_features Number of features.
+    * @param num_examples Size of training data.
+    * @param min_samples Minimum possible number of samples.
+    * @return A tuple of [[bda.local.model.tree.DecisionTreeSplit]] and [[bda.local.model.tree.DecisionTreeBin]].
+    */
   def findSplitsBins(input: Seq[LabeledPoint],
                      new_bins: Int,
                      num_bins_all: Array[Int],
@@ -317,13 +326,13 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
 
 
   /**
-   * Method to find splits for the feature.
-   *
-   * @param sampled_features Values of the feature.
-   * @param num_bins_all Number of bins for each features.
-   * @param index_f Id of the feature.
-   * @return value of splits for the feature with id = index_f.
-   */
+    * Method to find splits for the feature.
+    *
+    * @param sampled_features Values of the feature.
+    * @param num_bins_all Number of bins for each features.
+    * @param index_f Id of the feature.
+    * @return value of splits for the feature with id = index_f.
+    */
   def findSplits(sampled_features: Seq[Double],
                  num_bins_all: Array[Int],
                  index_f: Int): Seq[Double] = {
@@ -376,15 +385,15 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
   }
 
   /**
-   * Method to find best splits for splitting nodes.
-   *
-   * @param agg_leaves Aggregators for splitting nodes represented as a RDD of [[bda.local.model.tree.DecisionTreeStatsAgg]]
-   * @param num_fs Number of features.
-   * @param num_bins_all Number of bins for all features.
-   * @param impurity_calculator Impurity calculator.
-   * @param loss_calculator Loss calculator.
-   * @return Map[node-id, best-split].
-   */
+    * Method to find best splits for splitting nodes.
+    *
+    * @param agg_leaves Aggregators for splitting nodes represented as a RDD of [[bda.local.model.tree.DecisionTreeStatsAgg]]
+    * @param num_fs Number of features.
+    * @param num_bins_all Number of bins for all features.
+    * @param impurity_calculator Impurity calculator.
+    * @param loss_calculator Loss calculator.
+    * @return Map[node-id, best-split].
+    */
   def findBestSplit(agg_leaves: Seq[(Int, DecisionTreeStatsAgg)],
                     leaves: Seq[DecisionTreeNode],
                     num_fs: Int,
@@ -394,7 +403,7 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
                     loss_calculator: LossCalculator): scala.collection.Map[Int, DecisionTreeBestSplit] = {
 
     agg_leaves.map { case (ind, agg) =>
-      agg.toPrefixSum()
+      agg.toPrefixSum
 
       val best_split = Range(0, num_sub_fs).map { ind_sub_f =>
         val index_f = leaves(ind).sub_fs(ind_sub_f)
@@ -423,15 +432,15 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
   }
 
   /**
-   * Grow the decision tree according to best splits of each node.
-   *
-   * @param leaves Array stored splitting nodes.
-   * @param best_splits Best splits of all splitting nodes.
-   * @param bins Bins of all features.
-   * @param max_depth Maximum depth of the decision tree.
-   * @param min_info_gain Minimum information gain while splitting.
-   * @param min_node_size Minimum size of node.
-   */
+    * Grow the decision tree according to best splits of each node.
+    *
+    * @param leaves Array stored splitting nodes.
+    * @param best_splits Best splits of all splitting nodes.
+    * @param bins Bins of all features.
+    * @param max_depth Maximum depth of the decision tree.
+    * @param min_info_gain Minimum information gain while splitting.
+    * @param min_node_size Minimum size of node.
+    */
   def updateBestSplit(leaves: Array[DecisionTreeNode],
                       best_splits: scala.collection.Map[Int, DecisionTreeBestSplit],
                       bins: Array[Array[DecisionTreeBin]],
@@ -454,7 +463,8 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
 
       if (((node.impurity - best_split.weighted_impurity) >= min_info_gain)
         && (node.depth < max_depth)
-        && (node.count > min_node_size)) { // Is it reasonable of judging min_node_size?
+        && (node.count > min_node_size)) {
+        // Is it reasonable of judging min_node_size?
 
         // println("HouJP >> splitting ...")
 
@@ -469,24 +479,24 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
   }
 
   /**
-   * If the splitting node has children, then push into the queue as a new splitting node.
-   *
-   * @param que Queue which stored splitting node.
-   * @param node Left or right child of the splitting node.
-   */
+    * If the splitting node has children, then push into the queue as a new splitting node.
+    *
+    * @param que Queue which stored splitting node.
+    * @param node Left or right child of the splitting node.
+    */
   def inQueue(que: mutable.Queue[DecisionTreeNode], node: Option[DecisionTreeNode]): Unit = {
     node match {
-      case Some(n)  => que.enqueue(n)
+      case Some(n) => que.enqueue(n)
       case _ =>
     }
   }
 
   /**
-   * Calculate the RMSE for the input data.
-   * @param root Root node of the decision tree structure.
-   * @param input Input data represented as RDD of [[bda.common.obj.LabeledPoint]].
-   * @return RMSE of the input data.
-   */
+    * Calculate the RMSE for the input data.
+    * @param root Root node of the decision tree structure.
+    * @param input Input data represented as RDD of [[bda.common.obj.LabeledPoint]].
+    * @return RMSE of the input data.
+    */
   def evaluate(root: DecisionTreeNode, input: Seq[LabeledPoint]): Double = {
     val lps = input.map { case lp =>
       val pred = DecisionTreeModel.predict(lp.fs, root)
@@ -499,21 +509,21 @@ private[tree] class DecisionTreeTrainer(impurity: Impurity,
 
 
 /**
- * Decision tree model for regression.
- *
- * @param root Root node of decision tree structure.
- * @param impurity Impurity type with [[bda.local.model.tree.Impurity]].
- * @param loss Loss function type with [[bda.local.model.tree.Loss]].
- * @param max_depth Maximum depth of the decision tree.
- * @param max_bins Maximum number of bins.
- * @param min_samples Minimum number of samples used in finding splits and bins.
- * @param min_node_size Minimum number of instances in the leaf.
- * @param min_info_gain Minimum information gain while spliting.
- * @param row_rate sampling rate of training data set.
- * @param col_rate sampling rate of features.
- * @param impurity_calculator Impurity calculator.
- * @param loss_calculator Loss calculator.
- */
+  * Decision tree model for regression.
+  *
+  * @param root Root node of decision tree structure.
+  * @param impurity Impurity type with [[bda.local.model.tree.Impurity]].
+  * @param loss Loss function type with [[bda.local.model.tree.Loss]].
+  * @param max_depth Maximum depth of the decision tree.
+  * @param max_bins Maximum number of bins.
+  * @param min_samples Minimum number of samples used in finding splits and bins.
+  * @param min_node_size Minimum number of instances in the leaf.
+  * @param min_info_gain Minimum information gain while spliting.
+  * @param row_rate sampling rate of training data set.
+  * @param col_rate sampling rate of features.
+  * @param impurity_calculator Impurity calculator.
+  * @param loss_calculator Loss calculator.
+  */
 @SerialVersionUID(6529125048396757390L)
 class DecisionTreeModel(val root: DecisionTreeNode,
                         val feature_num: Int,
@@ -530,11 +540,11 @@ class DecisionTreeModel(val root: DecisionTreeNode,
                         val loss_calculator: LossCalculator) extends Serializable {
 
   /**
-   * Predict values for the given data using the model trained.
-   *
-   * @param input Prediction data set which represented as a RDD of [[bda.common.obj.LabeledPoint]].
-   * @return A RDD stored prediction.
-   */
+    * Predict values for the given data using the model trained.
+    *
+    * @param input Prediction data set which represented as a RDD of [[bda.common.obj.LabeledPoint]].
+    * @return A RDD stored prediction.
+    */
   def predict(input: Seq[LabeledPoint]): Seq[Double] = {
     val root = this.root
     val loss = this.loss_calculator
@@ -556,7 +566,7 @@ class DecisionTreeModel(val root: DecisionTreeNode,
     DecisionTreeModel.save(path, this)
   }
 
-  def showStructure: Unit = {
+  def showStructure(): Unit = {
     val node_que = new mutable.Queue[DecisionTreeNode]()
     node_que.enqueue(root)
     while (node_que.nonEmpty) {
@@ -572,18 +582,18 @@ class DecisionTreeModel(val root: DecisionTreeNode,
 }
 
 /**
- * Class to store best splitting information.
- *
- * @param weighted_impurity Weighted impurity of left child and right child.
- * @param index_f Id of the feature.
- * @param index_b Id of the bin.
- * @param l_impurity Impurity of left child.
- * @param r_impurity Impurity of right child.
- * @param l_pred Prediction of left child.
- * @param r_pred Prediction of right child.
- * @param l_cnt Number of instances of left child.
- * @param r_cnt Number of instances of right child.
- */
+  * Class to store best splitting information.
+  *
+  * @param weighted_impurity Weighted impurity of left child and right child.
+  * @param index_f Id of the feature.
+  * @param index_b Id of the bin.
+  * @param l_impurity Impurity of left child.
+  * @param r_impurity Impurity of right child.
+  * @param l_pred Prediction of left child.
+  * @param r_pred Prediction of right child.
+  * @param l_cnt Number of instances of left child.
+  * @param r_cnt Number of instances of right child.
+  */
 private[tree] case class DecisionTreeBestSplit(weighted_impurity: Double,
                                                index_f: Int,
                                                index_b: Int,
@@ -595,25 +605,6 @@ private[tree] case class DecisionTreeBestSplit(weighted_impurity: Double,
                                                r_cnt: Int) extends Serializable
 
 object DecisionTreeModel {
-
-  /**
-   * Predict values for a single data point using the model trained.
-   *
-   * @param fs feature vector of a single data point.
-   * @param root root node of decision tree structure.
-   * @return predicted value from the trained model.
-   */
-  private[tree] def predict(fs: SparseVector[Double], root: DecisionTreeNode): Double = {
-    var node = root
-    while (!node.is_leaf) {
-      if (fs(node.split.get.feature) <= node.split.get.threshold) {
-        node = node.left_child.get
-      } else {
-        node = node.right_child.get
-      }
-    }
-    node.predict
-  }
 
   /**
     * Store decision tree model on the disk.
@@ -635,22 +626,43 @@ object DecisionTreeModel {
 
     io.readObject[DecisionTreeModel](pt)
   }
+
+  /**
+    * Predict values for a single data point using the model trained.
+    *
+    * @param fs feature vector of a single data point.
+    * @param root root node of decision tree structure.
+    * @return predicted value from the trained model.
+    */
+  private[tree] def predict(fs: SparseVector[Double], root: DecisionTreeNode): Double = {
+    var node = root
+    while (!node.is_leaf) {
+      if (fs(node.split.get.feature) <= node.split.get.threshold) {
+        node = node.left_child.get
+      } else {
+        node = node.right_child.get
+      }
+    }
+    node.predict
+  }
 }
 
 
 /**
- * Static functions of [[bda.local.model.tree.DecisionTreeTrainer]].
- */
+  * Static functions of [[bda.local.model.tree.DecisionTreeTrainer]].
+  */
 private[tree] object DecisionTreeTrainer {
 
   /**
-   * Method to find the splitting node id which contains the point.
-   * @param point A instance in training data set.
-   * @param root Root of the decision tree.
-   * @param bins Array of bins of all the features.
-   * @return Id of splitting node which contains the point.
-   */
-  def findLeafId(point: DecisionTreePoint, root: DecisionTreeNode, bins: Array[Array[DecisionTreeBin]]): Int = {
+    * Method to find the splitting node id which contains the point.
+    * @param point A instance in training data set.
+    * @param root Root of the decision tree.
+    * @param bins Array of bins of all the features.
+    * @return Id of splitting node which contains the point.
+    */
+  def findLeafId(point: DecisionTreePoint,
+                 root: DecisionTreeNode,
+                 bins: Array[Array[DecisionTreeBin]]): Int = {
     var leaf = root
     while (!leaf.is_leaf) {
       val split = leaf.split.get
@@ -664,22 +676,22 @@ private[tree] object DecisionTreeTrainer {
   }
 
   /**
-   * Method to get number of splits with specified feature id.
-   *
-   * @param index_feature Id of feature.
-   * @param num_bins Number of bins of all features.
-   * @return Number of splits with feature-id = index_feature.
-   */
+    * Method to get number of splits with specified feature id.
+    *
+    * @param index_feature Id of feature.
+    * @param num_bins Number of bins of all features.
+    * @return Number of splits with feature-id = index_feature.
+    */
   def numSplits(index_feature: Int, num_bins: Seq[Int]): Int = {
     num_bins(index_feature) - 1
   }
 
   /**
-   * Method to set number of bins with specified feature id.
-   * @param index_feature Id of feature.
-   * @param num_splits Number of bins of all features.
-   * @param num_bins Number of bins of all features.
-   */
+    * Method to set number of bins with specified feature id.
+    * @param index_feature Id of feature.
+    * @param num_splits Number of bins of all features.
+    * @param num_bins Number of bins of all features.
+    */
   def setBins(index_feature: Int, num_splits: Int, num_bins: Array[Int]): Unit = {
     num_bins(index_feature) = num_splits + 1
   }
@@ -687,24 +699,24 @@ private[tree] object DecisionTreeTrainer {
 
 
 /**
- * Class that represents the features and labels of a data point.
- *
- * @param label Label of the data point.
- * @param binned_fs features of the data point.
- */
+  * Class that represents the features and labels of a data point.
+  *
+  * @param label Label of the data point.
+  * @param binned_fs features of the data point.
+  */
 private[tree] case class DecisionTreePoint(label: Double, weight: Int, binned_fs: Array[Int]) extends Serializable
 
 private[tree] object DecisionTreePoint {
 
   /**
-   * Convert input to a RDD of [[bda.local.model.tree.DecisionTreePoint]].
-   * @param input A RDD of [[bda.common.obj.LabeledPoint]].
-   * @param bins Bins of all features.
-   * @param num_bins_all Number of bins of all features.
-   * @param num_fs Number of features.
-   * @param row_rate sample rate of training data set.
-   * @return A RDD of [[bda.local.model.tree.DecisionTreePoint]].
-   */
+    * Convert input to a RDD of [[bda.local.model.tree.DecisionTreePoint]].
+    * @param input A RDD of [[bda.common.obj.LabeledPoint]].
+    * @param bins Bins of all features.
+    * @param num_bins_all Number of bins of all features.
+    * @param num_fs Number of features.
+    * @param row_rate sample rate of training data set.
+    * @return A RDD of [[bda.local.model.tree.DecisionTreePoint]].
+    */
   def convertToDecisionTreeRDD(input: Seq[LabeledPoint],
                                bins: Array[Array[DecisionTreeBin]],
                                num_bins_all: Array[Int],
@@ -714,20 +726,20 @@ private[tree] object DecisionTreePoint {
     // set input instances' weights use poisson distribution
     val poisson = new PoissonDistribution(row_rate)
 
-    input.map{ case lp =>
+    input.map { lp =>
       DecisionTreePoint.convertToDecisionTreePoint(lp, bins, num_bins_all, num_fs, poisson)
     }
   }
 
   /**
-   * Convert a data point into [[bda.local.model.tree.DecisionTreePoint]].
-   * @param lp A [[bda.common.obj.LabeledPoint]] instance.
-   * @param bins Bins of all features.
-   * @param num_bins_all Number of bins of all features.
-   * @param num_fs Number of fetures.
-   * @param poisson poisson distribution to sample without replacement.
-   * @return A [[bda.local.model.tree.DecisionTreePoint]] instance.
-   */
+    * Convert a data point into [[bda.local.model.tree.DecisionTreePoint]].
+    * @param lp A [[bda.common.obj.LabeledPoint]] instance.
+    * @param bins Bins of all features.
+    * @param num_bins_all Number of bins of all features.
+    * @param num_fs Number of fetures.
+    * @param poisson poisson distribution to sample without replacement.
+    * @return A [[bda.local.model.tree.DecisionTreePoint]] instance.
+    */
   def convertToDecisionTreePoint(lp: LabeledPoint,
                                  bins: Array[Array[DecisionTreeBin]],
                                  num_bins_all: Array[Int],
@@ -759,14 +771,14 @@ private[tree] object DecisionTreePoint {
   }
 
   /**
-   * Method to find bin-id by binary search with specified feature-value and feature-id.
-   * @param value Value of specified feature.
-   * @param index_feature Id of feature.
-   * @param bins Bins of all features.
-   * @param num_bins_all Number of bins of all features.
-   * @param num_fs Number of features.
-   * @return Id of bin with specified feature.
-   */
+    * Method to find bin-id by binary search with specified feature-value and feature-id.
+    * @param value Value of specified feature.
+    * @param index_feature Id of feature.
+    * @param bins Bins of all features.
+    * @param num_bins_all Number of bins of all features.
+    * @param num_fs Number of features.
+    * @return Id of bin with specified feature.
+    */
   def binarySearchForBin(value: Double,
                          index_feature: Int,
                          bins: Array[Array[DecisionTreeBin]],
@@ -791,13 +803,13 @@ private[tree] object DecisionTreePoint {
 
 
 /**
- * Class of nodes which form a tree.
- *
- * @param id Integer node id, 1-based.
- * @param depth Node depth in a tree, 0-based.
- */
-private[tree] class DecisionTreeNode (val id: Int,
-                                      val depth: Int) extends Serializable {
+  * Class of nodes which form a tree.
+  *
+  * @param id Integer node id, 1-based.
+  * @param depth Node depth in a tree, 0-based.
+  */
+private[tree] class DecisionTreeNode(val id: Int,
+                                     val depth: Int) extends Serializable {
 
   /** flag to show whether is a leaf-node */
   var is_leaf: Boolean = true
@@ -817,31 +829,21 @@ private[tree] class DecisionTreeNode (val id: Int,
   var sub_fs: Seq[Int] = null
 
   /**
-   * Convert this node into a string.
-   *
-   * @return A string which represented this node.
-   */
+    * Convert this node into a string.
+    *
+    * @return A string which represented this node.
+    */
   override def toString: String = {
     s"Node: id = $id, depth = $depth, predict = $predict, count = $count, impurity = $impurity, split = {${split.getOrElse("None")}}"
   }
 
   /**
-   * sample features.
-   *
-   * @param tol total number of features.
-   * @param rate sampling ratio of features.
-   */
-  def sampleFeatures(tol: Int, rate: Double): Unit = {
-    sub_fs = Sampler.subSample(tol, rate)
-  }
-
-  /**
-   * Method to generate left child of this node.
-   * @param l_impurity impurity value of left child of this node.
-   * @param l_pred prediction value of left child of this node.
-   * @param num_fs number of features.
-   * @param col_rate sampling rate of features.
-   */
+    * Method to generate left child of this node.
+    * @param l_impurity impurity value of left child of this node.
+    * @param l_pred prediction value of left child of this node.
+    * @param num_fs number of features.
+    * @param col_rate sampling rate of features.
+    */
   def generate_lchild(l_impurity: Double, l_pred: Double, l_cnt: Int, num_fs: Int, col_rate: Double): Unit = {
     left_child = Some(DecisionTreeNode.empty(id << 1, depth + 1))
     left_child.get.count = l_cnt
@@ -851,12 +853,22 @@ private[tree] class DecisionTreeNode (val id: Int,
   }
 
   /**
-   * Method to generate right child of this node.
-   * @param r_impurity impurity value of right child of this node.
-   * @param r_pred prediction value of right child of this node.
-   * @param num_fs number of features.
-   * @param col_rate sampling rate of features.
-   */
+    * sample features.
+    *
+    * @param tol total number of features.
+    * @param rate sampling ratio of features.
+    */
+  def sampleFeatures(tol: Int, rate: Double): Unit = {
+    sub_fs = Sampler.subSample(tol, rate)
+  }
+
+  /**
+    * Method to generate right child of this node.
+    * @param r_impurity impurity value of right child of this node.
+    * @param r_pred prediction value of right child of this node.
+    * @param num_fs number of features.
+    * @param col_rate sampling rate of features.
+    */
   def generate_rchild(r_impurity: Double, r_pred: Double, r_cnt: Int, num_fs: Int, col_rate: Double): Unit = {
     right_child = Some(DecisionTreeNode.empty(id << 1 | 1, depth + 1))
     right_child.get.count = r_cnt
@@ -870,23 +882,23 @@ private[tree] class DecisionTreeNode (val id: Int,
 private[tree] object DecisionTreeNode {
 
   /**
-   * Method to generate an empty node with specified id and depth.
-   *
-   * @param id Id of new node.
-   * @param depth Depth of new node.
-   * @return A [[bda.local.model.tree.DecisionTreeNode]] instance.
-   */
+    * Method to generate an empty node with specified id and depth.
+    *
+    * @param id Id of new node.
+    * @param depth Depth of new node.
+    * @return A [[bda.local.model.tree.DecisionTreeNode]] instance.
+    */
   def empty(id: Int, depth: Int): DecisionTreeNode = {
     new DecisionTreeNode(id, depth)
   }
 }
 
 /**
- * Class of aggregator to statistic node number, summation and squared summation.
- *
- * @param num_bins_all Number of bins of all features.
- * @param num_fs Number of features.
- */
+  * Class of aggregator to statistic node number, summation and squared summation.
+  *
+  * @param num_bins_all Number of bins of all features.
+  * @param num_fs Number of features.
+  */
 private[tree] class DecisionTreeStatsAgg(num_bins_all: Array[Int],
                                          num_fs: Int,
                                          num_sub_fs: Int) extends Serializable {
@@ -905,25 +917,11 @@ private[tree] class DecisionTreeStatsAgg(num_bins_all: Array[Int],
   }
 
   /**
-   * Method to update states array with specified feature.
-   *
-   * @param label Label which will add into the states.
-   * @param index_f Id of feature.
-   * @param binned_f Binned feature value.
-   */
-  def update(label: Double, weight: Int, index_f: Int, binned_f: Int): Unit = {
-    val offset = off_fs(index_f) + 3 * binned_f
-    stats(offset + 0) += weight
-    stats(offset + 1) += label * weight
-    stats(offset + 2) += label * label * weight
-  }
-
-  /**
-   * Method to update sates array with a data point.
-   *
-   * @param p A data point used to udpate states.
-   * @param sub_fs Sub features of specified node.
-   */
+    * Method to update sates array with a data point.
+    *
+    * @param p A data point used to udpate states.
+    * @param sub_fs Sub features of specified node.
+    */
   def update(p: DecisionTreePoint, sub_fs: Seq[Int]): Unit = {
     var index = 0
     while (index < num_sub_fs) {
@@ -934,11 +932,25 @@ private[tree] class DecisionTreeStatsAgg(num_bins_all: Array[Int],
   }
 
   /**
-   * Methed to merge another aggregator into this aggregator.
-   *
-   * @param other another aggregator.
-   * @return this aggregator which after merging.
-   */
+    * Method to update states array with specified feature.
+    *
+    * @param label Label which will add into the states.
+    * @param index_f Id of feature.
+    * @param binned_f Binned feature value.
+    */
+  def update(label: Double, weight: Int, index_f: Int, binned_f: Int): Unit = {
+    val offset = off_fs(index_f) + 3 * binned_f
+    stats(offset + 0) += weight
+    stats(offset + 1) += label * weight
+    stats(offset + 2) += label * label * weight
+  }
+
+  /**
+    * Methed to merge another aggregator into this aggregator.
+    *
+    * @param other another aggregator.
+    * @return this aggregator which after merging.
+    */
   def merge(other: DecisionTreeStatsAgg): DecisionTreeStatsAgg = {
     var index = 0
     while (index < len_stats) {
@@ -950,11 +962,11 @@ private[tree] class DecisionTreeStatsAgg(num_bins_all: Array[Int],
   }
 
   /**
-   * Method to convert value of states in the array into prefix summation form.
-   *
-   * @return this aggregator which represented as prefix summation.
-   */
-  def toPrefixSum(): DecisionTreeStatsAgg = {
+    * Method to convert value of states in the array into prefix summation form.
+    *
+    * @return this aggregator which represented as prefix summation.
+    */
+  def toPrefixSum: DecisionTreeStatsAgg = {
     Range(0, num_fs).foreach { index_f =>
       val num_bin = num_bins_all(index_f)
 
@@ -971,14 +983,14 @@ private[tree] class DecisionTreeStatsAgg(num_bins_all: Array[Int],
   }
 
   /**
-   * Method to calculate left child impurity, prediction and count.
-   *
-   * @param index_f Id of the feature.
-   * @param index_b Id of the bins.
-   * @param impurity_calculator Impurity calculator.
-   * @param loss_calculator Loss calculator.
-   * @return (impurity, predict, count) of left child.
-   */
+    * Method to calculate left child impurity, prediction and count.
+    *
+    * @param index_f Id of the feature.
+    * @param index_b Id of the bins.
+    * @param impurity_calculator Impurity calculator.
+    * @param loss_calculator Loss calculator.
+    * @return (impurity, predict, count) of left child.
+    */
   def calLeftInfo(index_f: Int,
                   index_b: Int,
                   impurity_calculator: ImpurityCalculator,
@@ -997,14 +1009,14 @@ private[tree] class DecisionTreeStatsAgg(num_bins_all: Array[Int],
   }
 
   /**
-   * Method to calculate right child impurity, prediction and count.
-   *
-   * @param index_f Id of the feature.
-   * @param index_b Id of the bins.
-   * @param impurity_calculator Impurity calculator.
-   * @param loss_calculator Loss calculator.
-   * @return (impurity, predict, count) of right child.
-   */
+    * Method to calculate right child impurity, prediction and count.
+    *
+    * @param index_f Id of the feature.
+    * @param index_b Id of the bins.
+    * @param impurity_calculator Impurity calculator.
+    * @param loss_calculator Loss calculator.
+    * @return (impurity, predict, count) of right child.
+    */
   def calRightInfo(index_f: Int,
                    index_b: Int,
                    impurity_calculator: ImpurityCalculator,
@@ -1025,41 +1037,44 @@ private[tree] class DecisionTreeStatsAgg(num_bins_all: Array[Int],
 }
 
 /**
- * Class of Split which stored information of splitting.
- *
- * @param feature Id of feature.
- * @param threshold Threshold used in splitting. Split left if feature < threshold, else right.
- */
+  * Class of Split which stored information of splitting.
+  *
+  * @param feature Id of feature.
+  * @param threshold Threshold used in splitting. Split left if feature < threshold, else right.
+  */
 private[tree] case class DecisionTreeSplit(feature: Int, threshold: Double) {
 
   /**
-   * Method to convert this into a string.
-   *
-   * @return A string which represented this split.
-   */
+    * Method to convert this into a string.
+    *
+    * @return A string which represented this split.
+    */
   override def toString: String = {
     s"feature = $feature, threshold = $threshold"
   }
 }
 
 /**
- * Class of Split which is located at left most.
- *
- * @param feature Id of feature.
- */
-private[tree] class DecisionTreeLowestSplit(feature: Int) extends DecisionTreeSplit(feature, Double.MinValue)
+  * Class of Split which is located at left most.
+  *
+  * @param feature Id of feature.
+  */
+private[tree] class DecisionTreeLowestSplit(feature: Int)
+  extends DecisionTreeSplit(feature, Double.MinValue)
 
 /**
- * Class of Split which is located at right most.
- *
- * @param feature Id of feature.
- */
-private[tree] class DecisionTreeHighestSplit(feature: Int) extends DecisionTreeSplit(feature, Double.MaxValue)
+  * Class of Split which is located at right most.
+  *
+  * @param feature Id of feature.
+  */
+private[tree] class DecisionTreeHighestSplit(feature: Int)
+  extends DecisionTreeSplit(feature, Double.MaxValue)
 
 /**
- * Class of Bin which stored information of borders.
- *
- * @param low_split Left border of this bin.
- * @param high_split Right border of this bin.
- */
-private[tree] case class DecisionTreeBin(low_split: DecisionTreeSplit, high_split: DecisionTreeSplit)
+  * Class of Bin which stored information of borders.
+  *
+  * @param low_split Left border of this bin.
+  * @param high_split Right border of this bin.
+  */
+private[tree] case class DecisionTreeBin(low_split: DecisionTreeSplit,
+                                         high_split: DecisionTreeSplit)

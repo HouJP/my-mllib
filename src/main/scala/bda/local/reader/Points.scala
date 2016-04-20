@@ -11,21 +11,21 @@ import bda.common.util.io.readLines
 object Points extends Logging {
 
   /**
-   * Read a LibSVM File with format:
-   * Each line is a labeled point (libsvm dataset do not have unlabeled data):
-   * label fid:v fid:v ...
-   *
-   * where
-   * - Label is {-1, +1} for binary classification, and {1, ..., K} for
-   * multi-classification.
-   * - Fid is start from 1, which should subtract 1 to 0-started.
-   * - v is a Double
-   *
-   * @note User have to specify the feature number ahead
-   *
-   * @param pt  Input file path
-   */
-  def readLibSVMFile(pt: String): Seq[LabeledPoint] = {
+    * Read a LibSVM File with format:
+    * Each line is a labeled point (libsvm dataset do not have unlabeled data):
+    * label fid:v fid:v ...
+    *
+    * where
+    * - Label is {-1, +1} for binary classification, and {1, ..., K} for
+    * multi-classification.
+    * - Fid is start from 1, which should subtract 1 to 0-started.
+    * - v is a Double
+    *
+    * @note User have to specify the feature number ahead
+    * @param pt       Input file path
+    * @param is_class whether libsvm file is used for classification
+    */
+  def readLibSVMFile(pt: String, is_class: Boolean): Seq[LabeledPoint] = {
     var n_feature = 0
     // parse the LibSVM file
     val rds = readLines(pt).map { ln =>
@@ -43,11 +43,11 @@ object Points extends Logging {
 
     // determine the class number
     val n_label = rds.map(_._1).distinct.size
-    logInfo(s"n(label)=${n_label}, n(feature)=${n_feature}")
+    logInfo(s"n(label)=$n_label, n(feature)=$n_feature")
 
     // transform to labeled points, and adjust label
     rds.map { case (label, fvs) =>
-      val new_label: Double = if (n_label > 2) {
+      val new_label: Double = if (n_label > 2 && is_class) {
         // for multi-class, decrease label to [0, C-1)
         label - 1
       } else {

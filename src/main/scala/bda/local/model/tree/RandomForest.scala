@@ -29,6 +29,7 @@ object RandomForest {
    * @param row_rate sample ratio of train data set.
    * @param col_rate sample ratio of features.
    * @param num_trees Number of decision trees.
+   * @param silent whether to show logs of the algorithm.
    * @return a [[bda.local.model.tree.RandomForestModel]] instance.
    */
   def train(train_data: Seq[LabeledPoint],
@@ -42,7 +43,8 @@ object RandomForest {
             min_info_gain: Double = 1e-6,
             row_rate: Double = 0.6,
             col_rate: Double = 0.6,
-            num_trees: Int = 20): RandomForestModel = {
+            num_trees: Int = 20,
+            silent: Boolean = false): RandomForestModel = {
 
     new RandomForestTrainer(Impurity.fromString(impurity),
       Loss.fromString(loss),
@@ -53,7 +55,8 @@ object RandomForest {
       min_info_gain,
       row_rate,
       col_rate,
-      num_trees).train(train_data, valid_data)
+      num_trees,
+      silent).train(train_data, valid_data)
   }
 }
 
@@ -70,6 +73,7 @@ object RandomForest {
  * @param row_rate sample ratio of train data set.
  * @param col_rate sample ratio of features.
  * @param num_trees number of decision trees.
+ * @param silent whether to show logs of the algorithm.
  */
 private[tree] class RandomForestTrainer(impurity: Impurity,
                                         loss: Loss,
@@ -80,7 +84,8 @@ private[tree] class RandomForestTrainer(impurity: Impurity,
                                         min_info_gain: Double,
                                         row_rate: Double,
                                         col_rate: Double,
-                                        num_trees: Int) extends Logging {
+                                        num_trees: Int,
+                                        silent: Boolean) extends Logging {
 
   /** Impurity calculator */
   val impurity_calculator = impurity match {
@@ -102,7 +107,8 @@ private[tree] class RandomForestTrainer(impurity: Impurity,
    * @param valid_data Validation data points.
    * @return a [[bda.local.model.tree.RandomForestModel]] instance which can be used to predict.
    */
-  def train(train_data: Seq[LabeledPoint], valid_data: Seq[LabeledPoint]): RandomForestModel = {
+  def train(train_data: Seq[LabeledPoint],
+            valid_data: Seq[LabeledPoint]): RandomForestModel = {
     val n_train = train_data.length
     val n_valid = valid_data match {
       case null => 0
@@ -122,17 +128,15 @@ private[tree] class RandomForestTrainer(impurity: Impurity,
       "row_rate" -> row_rate,
       "col_rate" -> col_rate,
       "num_trees" -> num_trees)
-    logInfo(msg_para.toString)
-
-    val timer = new Timer()
-    var pre_time = 0L
-    var now_time = 0L
-    var cost_time = 0L
-    var msg: Msg = null
+    if (!silent) {
+      logInfo(msg_para.toString)
+    }
 
     val wk_learners = new Array[DecisionTreeNode](num_trees)
     var ind = 0
     while (ind < num_trees) {
+      val timer = new Timer()
+
       val wl = new DecisionTreeTrainer(impurity,
         loss,
         max_depth,
@@ -141,12 +145,14 @@ private[tree] class RandomForestTrainer(impurity: Impurity,
         min_node_size,
         min_info_gain,
         row_rate,
-        col_rate).train(train_data, null)
+        col_rate,
+        true).train(train_data, null)
       wk_learners(ind) = wl.root
 
       ind += 1
 
-      msg = Msg("NumOfTrees" -> ind)
+      // show messages
+      val msg = Msg("Iter" -> ind)
       val train_rmse = RMSE(train_data.map { p =>
         (p.label, RandomForestModel.predict(p.fs, wk_learners.slice(0, ind)))
       })
@@ -157,12 +163,11 @@ private[tree] class RandomForestTrainer(impurity: Impurity,
         })
         msg.append("RMSE(valid)", valid_rmse)
       }
-      now_time = timer.cost()
-      cost_time = now_time - pre_time
-      pre_time = now_time
-      msg.append("AddTime", cost_time + "ms")
-      msg.append("TotalTime", now_time + "ms")
-      logInfo(msg.toString)
+      val cost_time = timer.cost()
+      msg.append("CostTime", cost_time + "ms")
+      if (!silent) {
+        logInfo(msg.toString)
+      }
     }
 
     new RandomForestModel(wk_learners,
@@ -225,7 +230,7 @@ class RandomForestModel(val wk_learners: Array[DecisionTreeNode],
   def predict(input: Seq[LabeledPoint]): Seq[Double] = {
     val wk_learners = this.wk_learners
 
-    val pred = input.map { case lp =>
+    val pred = input.map { lp =>
       RandomForestModel.predict(lp.fs, wk_learners)
     }
 
@@ -246,25 +251,25 @@ class RandomForestModel(val wk_learners: Array[DecisionTreeNode],
 object RandomForestModel {
 
   /**
-   * Predict values for a single data point using the model trained.
+    * Load random forest model from the disk.
    *
-   * @param fs feature vector of a single data point.
-   * @param wk_learners weak learners formed by roots of decision trees.
-   * @return Value of prediction
-   */
-  private[tree] def predict(fs: SparseVector[Double],
-                            wk_learners: Array[DecisionTreeNode]): Double = {
-    wk_learners.map(DecisionTreeModel.predict(fs, _)).sum / wk_learners.length
-  }
-
-  /**
-   * Load random forest model from the disk.
-   *
-   * @param pt The directory of the random forest model.
-   * @return A [[bda.local.model.tree.RandomForestModel]] instance.
+    * @param pt The directory of the random forest model.
+    * @return A [[bda.local.model.tree.RandomForestModel]] instance.
    */
   def load(pt: String): RandomForestModel = {
 
     io.readObject[RandomForestModel](pt)
+  }
+
+  /**
+    * Predict values for a single data point using the model trained.
+   *
+    * @param fs feature vector of a single data point.
+    * @param wk_learners weak learners formed by roots of decision trees.
+    * @return Value of prediction
+   */
+  private[tree] def predict(fs: SparseVector[Double],
+                            wk_learners: Array[DecisionTreeNode]): Double = {
+    wk_learners.map(DecisionTreeModel.predict(fs, _)).sum / wk_learners.length
   }
 }

@@ -31,6 +31,7 @@ object GradientBoost {
     * @param num_iter Number of iterations.
     * @param learn_rate Value of learning rate.
     * @param min_step Minimum step of each iteration, or stop it.
+    * @param silent whether to show logs of the algorithm.
     * @return a [[bda.local.model.tree.GradientBoostModel]] instance.
     */
   def train(train_data: Seq[LabeledPoint],
@@ -46,7 +47,8 @@ object GradientBoost {
             col_rate: Double = 0.6,
             num_iter: Int = 50,
             learn_rate: Double = 0.02,
-            min_step: Double = 1e-5): GradientBoostModel = {
+            min_step: Double = 1e-5,
+            silent: Boolean = false): GradientBoostModel = {
 
     new GradientBoostTrainer(Impurity.fromString(impurity),
       Loss.fromString(loss),
@@ -59,7 +61,8 @@ object GradientBoost {
       col_rate,
       num_iter,
       learn_rate,
-      min_step).train(train_data, valid_data)
+      min_step,
+      silent).train(train_data, valid_data)
   }
 }
 
@@ -76,6 +79,7 @@ object GradientBoost {
   * @param num_iter Number of iterations.
   * @param learn_rate Value of learning rate.
   * @param min_step Minimum step of each iteration, or stop it.
+  * @param silent whether to show logs of the algorithm.
   */
 private[tree] class GradientBoostTrainer(impurity: Impurity,
                                          loss: Loss,
@@ -88,7 +92,8 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
                                          col_rate: Double,
                                          num_iter: Int,
                                          learn_rate: Double,
-                                         min_step: Double) extends Logging {
+                                         min_step: Double,
+                                         silent: Boolean) extends Logging {
 
   /** Impurity calculator */
   val impurity_calculator = impurity match {
@@ -134,16 +139,15 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
       "num_iter" -> num_iter,
       "learn_rate" -> learn_rate,
       "min_step" -> min_step)
-    logInfo(msg_para.toString)
-
-    var cost_time = 0.0
-    var cost_count = 0
-
-    val timer = new Timer()
-    var pre_time_cost = 0L
+    if (!silent) {
+      logInfo(msg_para.toString)
+    }
 
     // get data to train DTree
     var data = train_data
+
+    // get a timer to static time cost
+    val timer = new Timer()
 
     // build weak learner 0
     val wl0 = new DecisionTreeTrainer(impurity,
@@ -154,7 +158,8 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
       min_node_size,
       min_info_gain,
       row_rate,
-      col_rate).train(data, null)
+      col_rate,
+      true).train(data, null)
     wk_learners(0) = wl0.root
 
     // compute prediction and RMSE for train data
@@ -174,22 +179,21 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
     var min_rmse = train_rmse
     var best_iter = 1
 
-    var tol_time_cost = timer.cost()
-    var now_time_cost = tol_time_cost - pre_time_cost
-    pre_time_cost = tol_time_cost
-    cost_count += 1
+    var cost_time = timer.cost()
 
     // show logs
-    var msg = Msg("Iter" -> cost_count, "RMSE(train)" -> train_rmse)
+    var msg = Msg("Iter" -> 1, "RMSE(train)" -> train_rmse)
     if (null != valid_data) {
       msg.append("RMSE(valid)", valid_rmse)
     }
-    msg.append("time cost", now_time_cost)
-    logInfo(msg.toString)
+    msg.append("CostTime", s"${cost_time}ms")
+    if (!silent) {
+      logInfo(msg.toString)
+    }
 
     var iter = 1
     while (iter < num_iter) {
-      val begin_t = System.nanoTime()
+      val timer = new Timer()
 
       // get data to train DTree
       data = train_pred.zip(train_data).map {
@@ -207,7 +211,8 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
         min_node_size,
         min_info_gain,
         row_rate,
-        col_rate).train(data, null)
+        col_rate,
+        true).train(data, null)
       wk_learners(iter) = wl.root
 
       // compute prediction and error for train data
@@ -233,23 +238,23 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
         valid_rmse = RMSE(valid_data.map(_.label).zip(valid_pred))
       }
 
-      tol_time_cost = timer.cost()
-      now_time_cost = tol_time_cost - pre_time_cost
-      pre_time_cost = tol_time_cost
-      cost_count += 1
+      val time_cost = timer.cost()
 
       // show logs
-      msg = Msg("Iter" -> cost_count, "RMSE(train)" -> train_rmse)
+      msg = Msg("Iter" -> (iter + 1), "RMSE(train)" -> train_rmse)
       if (null != valid_data) {
         msg.append("RMSE(valid)", valid_rmse)
       }
-      msg.append("time cost", now_time_cost)
-      logInfo(msg.toString)
-      // Log.log("INFO", s"fitting: iter = $iter, error = $train_err, cost_time = $now_time_cost")
+      msg.append("CostTime", s"${time_cost}ms")
+      if (!silent) {
+        logInfo(msg.toString)
+      }
 
       if (min_rmse - train_rmse < min_step) {
 
-        logInfo(s"Gradient Boost model training done, average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count})")
+        if (!silent) {
+          logInfo(s"Gradient Boost model training done.")
+        }
         return new GradientBoostModel(wk_learners.slice(0, best_iter),
           impurity,
           loss,
@@ -273,8 +278,9 @@ private[tree] class GradientBoostTrainer(impurity: Impurity,
       iter += 1
     }
 
-    logInfo(s"GBoost model training done, " +
-      s"average cost time of each iteration: ${tol_time_cost / cost_count}(${tol_time_cost} / ${cost_count}})")
+    if (!silent) {
+      logInfo(s"GBoost model training done.")
+    }
 
     new GradientBoostModel(wk_learners.slice(0, best_iter),
       impurity,
