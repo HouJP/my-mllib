@@ -28,8 +28,8 @@ object RunLocalRandomForest {
     val num_trees: Int = 20
     val model_pt = output_dir + "rf.model"
 
-    val train = Points.readLibSVMFile(data_dir + "cadata.train")
-    val test = Points.readLibSVMFile(data_dir + "cadata.test")
+    val train = Points.readLibSVMFile(data_dir + "cadata.train", is_class = false)
+    val test = Points.readLibSVMFile(data_dir + "cadata.test", is_class = false)
 
     val model: RandomForestModel = RandomForest.train(train,
       test,

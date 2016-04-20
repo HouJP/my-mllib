@@ -28,8 +28,8 @@ object RunLocalDecisionTree {
     val col_rate: Double = 1
     val model_pt = output_dir + "dtree.model"
 
-    val train_points = Points.readLibSVMFile(data_dir + "cadata.train")
-    val test_points = Points.readLibSVMFile(data_dir + "cadata.test")
+    val train_points = Points.readLibSVMFile(data_dir + "cadata.train", is_class = false)
+    val test_points = Points.readLibSVMFile(data_dir + "cadata.test", is_class = false)
 
     val model: DecisionTreeModel = DecisionTree.train(train_points,
       test_points,

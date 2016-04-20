@@ -44,7 +44,7 @@ object RunSparkGBRT {
       min_node_size = 10,
       min_info_gain = 1e-6,
       num_round = 100,
-      learn_rate = 0.01)
+      learn_rate = 0.1)
 
     // Error of training data set
     val train_preds = gbrt_model.predict(train).map(e => (e._2, e._3))
