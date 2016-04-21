@@ -253,15 +253,15 @@
 
 %%%%%%%%%% 论文标题、作者等 %%%%%%%%%%
 \title{树算法~原理与实现}
-%\author{BDA小组\\                     % 作者
-%        中国科学院计算技术研究所}
-\date{04/04/2016~更新}                % 日期
+\author{BDA小组，侯建鹏\\                     % 作者
+        中国科学院计算技术研究所}
+\date{04/21/2016~更新}                % 日期
 \maketitle                           % 生成标题
-% \tableofcontents                     % 插入目录
-% \thispagestyle{empty}                % 首页无页眉页脚
+\tableofcontents                     % 插入目录
+\thispagestyle{empty}                % 首页无页眉页脚
 
 
-
+\newpage
 
 
 %%%%%%%%%% section %%%%%%%%%%
@@ -315,7 +315,7 @@ CART模型的构造采用的是二分递归分割的方法，从根节点开始�
 
 \begin{eqnarray}
   \label{eqt:variance2}
-{I}_{v}(N)=\frac{1}{\left | S \right |}\left ( \sum_{i\in S} {y_{i}}^2 - \frac{1}{\left | S \right |} \sum_{i \in S} {y_{i}}^2 \right )
+{I}_{v}(N)=\frac{1}{\left | S \right |}\left ( \sum_{i\in S} {y_{i}}^2 - \frac{1}{\left | S \right |} \left ( \sum_{i \in S} {y_{i}} \right )^2 \right )
 \end{eqnarray}
 
 
@@ -420,13 +420,10 @@ P_{i} = \frac{1}{\left | S_{i} \right |} \sum_{j \in S_{i}} y_{ij}
 
 \subsubsection{分类}
 
-\begin{lstlisting}[language={SCALA},title={RunCARTForClassificationDemo.scala}]  
+\begin{lstlisting}[language={SCALA},title={RunCARTForClassification.scala}]  
 // read training data and testing data from disk
-val train = Points.readLibSVMFile(sc, data_dir + "a1a")
-val test = Points.readLibSVMFile(sc, data_dir + "a1a.t")
-
-train.cache()
-test.cache()
+val train = Points.readLibSVMFile(sc, data_dir + "a1a").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "a1a.t").cache()
 
 // train a model of CART for classification
 val cart_model = CART.train(
@@ -438,142 +435,255 @@ val cart_model = CART.train(
   min_node_size = 15,
   min_info_gain = 1e-6)
 
-// show struct of CART model
+// show structure of CART model
 cart_model.printStructure()
 
-// preict for testing data use the model
+// predict for testing data using the model
 val preds = cart_model.predict(test)
 // calculate testing error
-val err = preds.filter(r => r._1 != r._2).count().toDouble / test.count()
-println("Test Error = " + err)
+val err = preds.filter(r => r._2 != r._3).count().toDouble / test.count()
+println(s"Test Error: $err")
 \end{lstlisting}  
 
 \subsubsection{回归}
 
-\begin{lstlisting}[language={SCALA},title={RunCARTForRegressionDemo.scala}]  
+\begin{lstlisting}[language={SCALA},title={RunCARTForRegression.scala}]  
 // read training data and testing data from disk
-val train = Points.readLibSVMFile(sc, data_dir + "cadata.train")
-val test = Points.readLibSVMFile(sc, data_dir + "cadata.test")
-
-train.cache()
-test.cache()
+val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
 
 // train a model of CART for regression
 val cart_model = CART.train(
   train,
-  impurity,
-  max_depth,
-  max_bins,
-  bin_samples,
-  min_node_size,
-  min_info_gain)
+  impurity = "Variance",
+  max_depth = 15,
+  max_bins = 32,
+  bin_samples = 10000,
+  min_node_size = 10,
+  min_info_gain = 1e-6)
 
-// show struct of CART model
+// show structure of CART model
 cart_model.printStructure()
 
-// preict for testing data use the model
-val preds = test.map {
-  p =>
-    (p.label, cart_model.predict(p.fs))
-}
+// predict for testing data use the model
+val preds = cart_model.predict(test)
 // calculate testing error
-println(s"Test RMSE: ${RMSE(preds)}")
+println(s"Test RMSE: ${RMSE(preds.map(e => (e._2, e._3)))}")
 \end{lstlisting}  
 
-\section{GBRT}
+\section{Gradient Boosting Decision Trees}
 
 \subsection{算法基础}
 
-GBRT(Gradient Boosting Regression Trees)是迭代的回归树算法。该算法模型由多棵回归树构成，所有回归树的预测结果的累加值即为最终的预测值。GBRT是一种泛化能力(Generalization)很强的算法。
+GBDT(Gradient Boosting Decision Trees)算法用来解决K分类问题。 它是一种梯度迭代算法(Gradient Boosting)，每轮迭代的过程中会产生K棵回归树。
 
-\subsubsection{回归树}
+\subsubsection{损失函数}
 
-回归树是GBRT的基本组成单位，用来做回归分析。回归树在上一节进行了详细的说明，此处不再赘述。
+使用Log对数损失作为损失函数，如~(\ref{eqt:gbdt_loss})~所示。
 
-% GBRT的每一轮迭代都会生成一棵新的回归树，将所有训练得到的回归树的预测值按一定方式累加作为预测值，与真实值一起代入损失函数并求预测值偏导，得到的数据作为下一轮的输入，继续迭代。 \\
+\begin{eqnarray}
+  \label{eqt:gbdt_loss}
+L\left ( \left \{ y_{k}, F_{k}\left ( \mathbf{x} \right ) \right \}_{1}^{K} \right ) = -\sum _{k=1}^{K} {y_{k} \log p_{k}(\mathbf{x})}
+\end{eqnarray}
 
-\subsubsection{梯度迭代}
+其中，$y_{k}=1(class=k)\in \left \{ 0, 1 \right \}$且$p_{k}\left ( \mathbf{x} \right ) = Pr(y_{k}=1| \mathbf{x})$。 采用logistic变换得到概率函数，如~(\ref{eqt:gbdt_p})~所示。
 
-GBRT的每一轮迭代都会生成一棵新的回归树，将所有训练得到的回归树的预测值按一定方式累加作为预测值，与真实值一起代入损失函数并求预测值偏导，得到的数据作为下一轮的输入，继续迭代。 \\
+\begin{eqnarray}
+  \label{eqt:gbdt_p}
+p_{k}\left ( \mathbf{x} \right ) = exp\left ( F_{k}\left ( \mathbf{x} \right ) \right ) / \sum _{l=1}^{K}{exp\left ( F_{l}\left ( \mathbf{x} \right ) \right )}
+\end{eqnarray}
 
-伪代码~(\ref{alg:gb})详细说明了GBRT算法中梯度迭代的执行过程，即如何构建回归树模型并将其进行组合。
+\subsubsection{残差计算}
+
+将~(\ref{eqt:gbdt_p})~代入~(\ref{eqt:gbdt_loss})~中，通过求一阶导得到每轮迭代后的残差(residuals)，如~(\ref{eqt:gbdt_residuals})~所示。
+
+\begin{eqnarray}
+  \label{eqt:gbdt_residuals}
+\tilde{y}_{ik}=-\left [ \frac{\partial L\left ( \left \{ y_{il},F_{l}\left ( \mathbf{x}_{i} \right ) \right \}_{l=1}^{K} \right )}{\partial F_{k}\left ( \mathbf{x}_{i} \right )} \right ]_{\left \{ F_{l}=F_{l,m-1}\left ( \mathbf{x} \right ) \right \}_{1}^{K}} = y_{ik}-p_{k,m-1}\left ( \mathbf{x}_{i} \right )
+\end{eqnarray}
+
+\subsubsection{残差拟合}
+
+每一轮迭代中，通过使用K棵回归树拟合$\tilde{y}_{ik}$来预测每个类别的残差。设每棵回归树有$J$个叶子节点，对应的样本区域为$\left \{ R_{jkm} \right \}_{j=1}^{J}$，以及每个区域的预测值为$\left \{ \gamma _{jkm} \right \}_{j=1}^{J}$。区域的预测值通过式~(\ref{eqt:gbdt_gamma})~求解。
+
+\begin{eqnarray}
+  \label{eqt:gbdt_gamma}
+\left \{ \gamma _{jkm} \right \} = \arg \min_{\left \{ \gamma _{jk} \right \} } \sum _{i=1}^{N} \sum _{k=1}^{K}\phi \left ( y_{ik},F_{k,m-1}\left ( \mathbf{x}_{i} \right )+\sum _{j=1}^{J} \gamma _{jk}1\left ( \mathbf{x}_{i}\in R_{jm} \right )  \right )
+\end{eqnarray}
+
+其中，$\phi \left ( y_{k}, F_{k} \right ) = -y_{k} \log p_{k}$。
+
+由于式~(\ref{eqt:gbdt_gamma})~没有解析解(closed form solution)，因此通过式~(\ref{eqt:gbdt_gamma_approximation})~求取其近似解。
+
+\begin{eqnarray}
+  \label{eqt:gbdt_gamma_approximation}
+\gamma _{jkm}  = \frac{K - 1}{K} \frac{\sum _{\mathbf{x}_{i} \in R_{jkm}}{\tilde{y}_{ik}}}{\sum _{\mathbf{x}_{i} \in R_{jkm}}{\left | \tilde{y}_{ik} \right |\left ( 1-\left | \tilde{y}_{ik} \right | \right )}}
+\end{eqnarray}
+
+\subsubsection{伪代码}
+
+用于K分类的GBDT算法的伪代码如~(\ref{alg:gbdt})~所示。
 
 \begin{algorithm}
-	\caption{Gradient tree boosting for multiple additive regression trees}
-	\label{alg:gb}
-	\begin{algorithmic}[1] %每行显示行号
-	\State $f_{0} \gets argmin_{\gamma} \sum_{i = 1}^{N} L \left ( y_{i}, \gamma\right )$
-	\For{$m = 1 \to M$}
-		\For{$i = 1 \to N$}
-			\State $r_{im} \gets -\left [ \frac{\partial L\left ( y_{i}, f\left ( x_{i} \right ) \right )}{\partial f\left ( x_{i} \right )} \right ]_{f=f_{m-1}}$			
-		\EndFor
-		\State Fit a regression tree to the targets $r_{im}$ giving terminal regions $R_{jm}, j = 1,2,...,J_{m}$.
-		\For{$j = 1 \to J_{m}$}
-			\State $\gamma_{jm} \gets argmin_{\gamma} \sum_{x_{i} \in R_{jm}} L\left ( y_{i},f_{m-1}\left ( x_{i} \right ) + \gamma \right )$
-		\EndFor
-		\State $f_{m}\left ( x \right ) \gets f_{m-1}\left ( x \right ) + \sum_{j=1}^{J_{m}} \gamma_{jm}I\left ( x \in R_{jm} \right )$
-		\label{alg:gb:update}
-	\EndFor
-	\State Output $\hat{f}\left ( x \right ) \gets f_{M}\left ( x \right )$
-	\end{algorithmic}
+  \caption{$L_{K}\_TreeBoost$}
+  \label{alg:gbdt}
+  \begin{algorithmic}[1] %每行显示行号
+  \State $F_{k0}\left ( \mathbf{x} \right ) = 0, k = 1 \to K$
+  \For{$m = 1 \to M $}
+    \State $p_{k}\left ( \mathbf{x} \right ) = exp\left ( F_{k}\left ( \mathbf{x} \right ) \right ) / \sum _{l=1}^{K}{exp\left ( F_{l}\left ( \mathbf{x} \right ) \right )}, k = 1 \to K$
+    \For{$k=1 \to K$}
+      \State $\tilde{y}_{ik} = y_{ik}-p_{k,m-1}\left ( \mathbf{x}_{i} \right ), i = 1 \to N$
+      \State $\left \{ R_{jkm} \right \}_{j=1}^{J} = J-terminal~node~tree\left ( \left \{ \tilde{y}_{ik},\mathbf{x}_{i} \right \}_{1}^{N} \right )$
+      \State $\gamma _{jkm}  = \frac{K - 1}{K} \frac{\sum _{\mathbf{x}_{i} \in R_{jkm}}{\tilde{y}_{ik}}}{\sum _{\mathbf{x}_{i} \in R_{jkm}}{\left | \tilde{y}_{ik} \right |\left ( 1-\left | \tilde{y}_{ik} \right | \right )}}, j = 1 \to J$
+      \State $F_{km}\left ( \mathbf{x} \right ) = F_{k,m-1}\left ( \mathbf{x} \right ) + \sum _{j=1}^{J}{\gamma_{jkm}1\left ( \mathbf{x} \in R_{jkm}\right ) }$ 
+    \EndFor
+  \EndFor
+  \end{algorithmic}
 \end{algorithm}
 
-\subsubsection{缩减思想}
+\subsubsection{预测结果}
 
-缩减(Shrinkage)的思想认为，在模型的迭代过程中，每次走一小步逐渐逼近结果的效果，要比每次都一大步很快逼近结果的方式更容易避免过拟合，同时也更容易收敛。 \\
+根据伪代码~(\ref{alg:gbdt})~，得到 $\left \{ F_{kM}\left ( \mathbf{x} \right ) \right \}_{1}^{K}$， 通过式~(\ref{eqt:gbdt_p})~计算得 $\left \{ p_{kM}\left ( \mathbf{x} \right ) \right \}_{1}^{K}$。最终，通过式~(\ref{eqt:gbdt_k})~得到分类结果。
 
-也就是说，我们不能完全信任每一棵决策树，每一棵决策树只能学到真理的一小部分，累加的时候只累加一小部分，通过多棵决策树来弥补不足。 \\
-
-因此，对伪代码~($\ref{alg:gb}$)~第~($\ref{alg:gb:update}$)~行的公式进行修改，如公式~($\ref{eqt:learning_rate}$)~所示。其中，$\rho_{m}$通常被称作学习率(Learning Rate)。
 \begin{eqnarray}
-	\label{eqt:learning_rate}
-	f_{m}\left ( x \right ) \gets f_{m-1}\left ( x \right ) + \rho_{m} \sum_{j=1}^{J_{m}} \gamma_{jm}I\left ( x \in R_{jm} \right )
+  \label{eqt:gbdt_k}
+  \hat{k}\left ( \mathbf{x} \right ) = \arg \min_{1\leqslant k\leqslant K}\sum _{k'=1}^{K}{c\left ( k,k' \right )p_{k'M}\left ( \mathbf{x} \right )}
 \end{eqnarray}
 
 \subsection{使用示例}
 
-\begin{lstlisting}[language={SCALA},title={RunGradientBoostDemo.scala}]  
+\begin{lstlisting}[language={SCALA},title={RunGBDT.scala}]  
 // read training data and testing data from disk
-val train = Points.readLibSVMFile(sc, data_dir + "cadata.train")
-val test = Points.readLibSVMFile(sc, data_dir + "cadata.test")
+val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
 
-train.cache()
-test.cache()
-
-// train a model of decision tree
-val model: GradientBoostModel = GradientBoost.train(
-  train_data = train,
-  valid_data = null,
+// train a model of GBDT for multiple classification
+val gbdt_model = GBDT.train(train,
   impurity = "Variance",
-  loss = "SquaredLoss",
-  max_depth = 10,
+  max_depth = 15,
   max_bins = 32,
-  min_samples = 10000,
-  min_node_size = 15,
+  bin_samples = 10000,
+  min_node_size = 10,
   min_info_gain = 1e-6,
-  row_rate = 0.6,
-  col_rate = 0.6,
-  num_iter = 20,
-  learn_rate = 0.02,
-  min_step = 1e-6, 
-  silent = false)
+  num_round = 20)
 
-// predict for testing data use the model
-val predictions = model.predict(test).zip(test).map {
-  case (y, pn) => s"$y\t$pn"
-}
-// save predictions on disk
-predictions.saveAsTextFile(prediction_pt)
-
-// save the model on disk
-model.save(sc, model_pt)
+// predict for testing data using the model
+val preds = gbdt_model.predict(test)
+// calculate testing error
+val err = preds.filter(r => r._2 != r._3).count().toDouble / test.count()
+println(s"Test Error: $err")
 \end{lstlisting}  
 
-\section{随机森林}
+\section{Gradient Boosting Regression Trees}
+
+\subsection{算法基础}
+
+GBRT(Gradient Boosting Regression Trees)算法用来解决回归问题。它和GBDT类似，也是一种梯度迭代算法(Gradient Boosting)，每轮迭代的过程中会产生一棵回归树。
+
+\subsubsection{损失函数}
+
+使用平方损失作为损失函数，如式~(\ref{eqt:gbrt_loss})~所示。
+
+\begin{eqnarray}
+  \label{eqt:gbrt_loss}
+L\left ( y,F\left ( \mathbf{x} \right ) \right ) = \left ( y-F \left ( \mathbf{x} \right )\right )^{2} / 2
+\end{eqnarray}
+
+\subsubsection{残差计算}
+
+通过求一阶导得到每轮迭代后的残差(residuals)，如式~(\ref{eqt:gbrt_residuals})~所示。
+
+\begin{eqnarray}
+  \label{eqt:gbrt_residuals}
+\tilde{y}_{i}=-\left [ \frac{\partial L\left ( y_{i},F\left ( \mathbf{x}_{i} \right ) \right )}{\partial F\left ( \mathbf{x}_{i} \right )} \right ]_{F=F_{m-1}\left ( \mathbf{x} \right ) } = y_{i}-F_{m-1}\left ( \mathbf{x}_{i} \right )
+\end{eqnarray}
+
+\subsubsection{残差拟合}
+
+每一轮迭代中，通过建立一棵回归树拟合$\tilde{y}_{i}$来预测本轮残差。设每棵回归树有$J$个叶子节点，对应的样本区域为$\left \{ R_{jm} \right \}_{j=1}^{J}$，以及每个区域的预测值为$\left \{ \gamma _{jm} \right \}_{j=1}^{J}$。区域的预测值通过式~(\ref{eqt:gbrt_gamma})~求解。
+
+\begin{eqnarray}
+  \label{eqt:gbrt_gamma}
+\left \{ \gamma _{jm} \right \}_{1}^{J} = \arg \min_{\left \{ \gamma _{j} \right \}_{1}^{J}} {\sum _{i=1}^{N}{ L\left ( y_{i}, F_{m-1}\left ( \mathbf{x}_{i} \right ) + \sum _{j=1}^{J}{\gamma _{j}1\left ( x \in R_{jm} \right )} \right ) }}
+\end{eqnarray}
+
+由于决策树的$J$个样本区域互不重叠，因此区域的预测值可进一步推导，得到式~(\ref{eqt:gbrt_gamma_2})~。
+
+\begin{eqnarray}
+  \label{eqt:gbrt_gamma_2}
+ \gamma _{jm} = \arg \min_{ \gamma } {\sum _{\mathbf{x}_{i} \in R_{jm}}{ L\left ( y_{i}, F_{m-1}\left ( \mathbf{x}_{i} \right ) + \gamma \right ) }}
+\end{eqnarray}
+
+最终，$\gamma _{jm}$的解析解如~(\ref{eqt:gbrt_gamma_3})~所示。
+
+\begin{eqnarray}
+  \label{eqt:gbrt_gamma_3}
+ \gamma _{jm} = mean_{\mathbf{x}_{i} \in R_{jm}}{\left \{ y_{i} - F_{m - 1}\left ( \mathbf{x}_{i} \right ) \right \}} = mean_{\mathbf{x}_{i} \in R_{jm}}{\left \{ \tilde{y}_{i} \right \}}
+\end{eqnarray}
+
+\subsubsection{伪代码}
+
+用于回归的GBRT算法的伪代码如~(\ref{alg:gbrt})~所示。
+
+\begin{algorithm}
+  \caption{$LS\_TreeBoost$}
+  \label{alg:gbrt}
+  \begin{algorithmic}[1] %每行显示行号
+  \State $F_{0}\left ( \mathbf{x} \right ) = mean\left \{ y_{i} \right \}_{1}^{N}$
+  \For{$m = 1 \to M $}
+    \State $\tilde{y}_{i}= y_{i}-F_{m-1}\left ( \mathbf{x}_{i} \right ),i = 1 \to N$
+    \State $\left \{ R_{jm} \right \}_{j=1}^{J} = J-terminal~node~tree\left ( \left \{ \tilde{y}_{i},\mathbf{x}_{i} \right \}_{1}^{N} \right )$
+    \State $ \gamma _{jm} = mean_{\mathbf{x}_{i} \in R_{jm}}{\left \{ \tilde{y}_{i} \right \}}, j = 1 \to J$
+    \State $F_{m}\left ( \mathbf{x} \right ) = F_{m-1}\left ( \mathbf{x} \right ) + \sum _{j=1}^{J}{\gamma_{jm}1\left ( \mathbf{x} \in R_{jm}\right ) }$
+    \label{alg:gbrt:f_m}
+  \EndFor
+  \end{algorithmic}
+\end{algorithm}
+
+\subsubsection{预测结果}
+
+根据伪代码~(\ref{alg:gbrt})~，得到$F_{M}\left ( \mathbf{x} \right )$，即为预测值。
+
+\subsubsection{正则化}
+
+在预测问题中，过度拟合训练集往往会事与愿违。因此，我们对算法~(\ref{alg:gbrt})~的第~({\ref{alg:gbrt:f_m})~步引入正则化(Regularization)来防止过拟合(over-fitting)。如式~(\ref{eqt:gbrt_f_m})~所示。
+
+\begin{eqnarray}
+  \label{eqt:gbrt_f_m}
+F_{m}\left ( \mathbf{x} \right ) = F_{m-1}\left ( \mathbf{x} \right ) + \nu \sum _{j=1}^{J}{\gamma_{jm}1\left ( \mathbf{x} \in R_{jm}\right ) }, 0< \nu \leq 1
+\end{eqnarray}
+
+\subsection{使用示例}
+
+\begin{lstlisting}[language={SCALA},title={RunGBRT.scala}]  
+// read training data and testing data from disk
+val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
+
+// train a model of GBRT for regression
+val gbrt_model = GBRT.train(
+  train,
+  Array(("test", test)),
+  impurity = "Variance",
+  max_depth = 15,
+  max_bins = 32,
+  bin_samples = 10000,
+  min_node_size = 10,
+  min_info_gain = 1e-6,
+  num_round = 100,
+  learn_rate = 0.1)
+
+// predict for testing data using the model
+val preds = gbrt_model.predict(test)
+// calculate testing error
+println(s”Test RMSE: ${RMSE(preds.map(e => (e._2, e._3)))}”)
+\end{lstlisting}  
+
+\section{Random Forest}
 
 \subsection{基本思想}
 
-随机森林算法生成很多棵回归树，当对新的样本进行预测的时候，随机森林中的每一棵树都会给出自己的预测值，并由此进行“投票”，在回归问题中，随机森林的输出是所有回归树输出的平均值。
+随机森林(Random Forest)算法可以用来解决分类和回归问题。它以CART模型作为弱学习器(weak learners)，并对它们的结果进行融合。
 
 \subsubsection{随机采样}
 
@@ -595,52 +705,77 @@ model.save(sc, model_pt)
   \begin{algorithmic}[1] %每行显示行号
   \For{$m = 1 \to M$}
     \State Sample, with replacement from $\mathbf{X}$, $\mathbf{Y}$; call these $\mathbf{X_{m}}$, $\mathbf{Y_{m}}$.
-    \State Fit a regression tree to the targets $y_{im}$($y_{im} \in \mathbf{Y_{m}}$) giving terminal regions $R_{jm}, j = 1,2,...,J_{m}$(Sample features without replacement during nodes splitting of the regression tree).
+    \State Fit a CART model to the targets $y_{im}$($y_{im} \in \mathbf{Y_{m}}$) giving terminal regions $R_{jm}, j = 1,2,...,J_{m}$(Sample features without replacement during nodes splitting of the CART model).
     \For{$j = 1 \to J_{m}$}
-      \State $\gamma_{jm} \gets argmin_{\gamma} \sum_{x_{i} \in R_{jm}} L\left ( y_{i},f_{m-1}\left ( x_{i} \right ) + \gamma \right )$
+      \State $\gamma_{jm} \gets argmin_{\gamma} \sum_{x_{i} \in R_{jm}} L\left ( y_{i}, \gamma \right )$
     \EndFor
-    \State $f_{m}\left ( x \right ) \gets f_{m-1}\left ( x \right ) + \sum_{j=1}^{J_{m}} \gamma_{jm}I\left ( x \in R_{jm} \right )$
   \EndFor
-  \State Output $\hat{f}\left ( x \right ) \gets  \frac{1}{M} f_{M}\left ( x \right )$
   \end{algorithmic}
 \end{algorithm}
 
+\subsubsection{预测结果}
+
+随机森林算法生成很多棵决策树(CART)，当对新的样本进行预测的时候，随机森林中的每一棵树都会给出自己的预测值，并由此进行“投票”。
+
+\begin{itemize}
+  \item 对分类问题，随机森林输出所有分类树结果的众数。
+  \item 对回归问题，随机森林输出所有回归树结果的均值。
+\end{itemize}
+
 \subsection{使用示例}
 
-\begin{lstlisting}[language={SCALA},title={RunRandomForestDemo.scala}]  
+\subsubsection{分类}
+
+\begin{lstlisting}[language={SCALA},title={RunRandomForestForClassification.scala}]  
 // read training data and testing data from disk
-val train = Points.readLibSVMFile(sc, data_dir + "cadata.train")
-val test = Points.readLibSVMFile(sc, data_dir + "cadata.test")
+val train = Points.readLibSVMFile(sc, data_dir + "a1a").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "a1a.t").cache()
 
-train.cache()
-test.cache()
-
-// train a model of decision tree
-val model: RandomForestModel = RandomForest.train(
-  train_data = train,
-  valid_data = null,
-  impurity = "Variance",
-  loss = "SquaredLoss",
+// train a model of Random Forest for classification
+val rf_model = RandomForest.train(
+  train,
+  impurity = "Gini",
   max_depth = 10,
   max_bins = 32,
-  min_samples = 10000,
+  bin_samples = 10000,
   min_node_size = 15,
   min_info_gain = 1e-6,
   row_rate = 0.6,
-  col_rate = 0.2,
-  num_trees = 20,
-  silent = false)
+  col_rate = 0.6,
+  num_trees = 100)
+
+// predict for testing data using the model
+val preds = rf_model.predict(test)
+// calculate testing error
+val err = preds.filter(r => r._2 != r._3).count().toDouble / test.count()
+println(s"Test Error: $err")
+\end{lstlisting}  
+
+\subsubsection{回归}
+
+\begin{lstlisting}[language={SCALA},title={RunRandomForestForRegression.scala}]  
+// read training data and testing data from disk
+val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
+
+// train a model of Random Forest for regression
+val rf_model = RandomForest.train(
+  train,
+  impurity = "Variance",
+  max_depth = 15,
+  max_bins = 32,
+  bin_samples = 10000,
+  min_node_size = 10,
+  min_info_gain = 1e-6,
+  row_rate = 0.6,
+  col_rate = 0.6,
+  num_trees = 100)
 
 // predict for testing data use the model
-val predictions = model.predict(test).zip(test).map {
-  case (y, pn) => s"$y\t$pn"
-}
-// save predictions on disk
-predictions.saveAsTextFile(prediction_pt)
-
-// save the model on disk
-model.save(sc, model_pt)
-\end{lstlisting} 
+val preds = rf_model.predict(test)
+// calculate testing error
+println(s"Test RMSE: ${RMSE(preds.map(e => (e._2, e._3)))}")
+\end{lstlisting}  
 
 
 % \TeX~有诸如AMS\TeX、\LaTeX~等宏库。在~FreeBSD~下，缺省的宏库是~te\TeX。
@@ -743,10 +878,12 @@ model.save(sc, model_pt)
 % Transcript written in Template4CJK.ilg.
 % \end{lstlisting}
 
+
+\newpage
 % \printindex % 打印出索引名及其所在页码，即那些\index{索引名}
 % %%%%%%%%%% 参考文献 %%%%%%%%%%
 \begin{thebibliography}{}
-\bibitemFriedman J H. Greedy function approximation: a gradient boosting machine[J]. Annals of statistics, 2001: 1189-1232.
+\bibitem Friedman J H. Greedy function approximation: a gradient boosting machine[J]. Annals of statistics, 2001: 1189-1232.
 \end{thebibliography}
 \clearpage
 \end{document}
