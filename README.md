@@ -86,6 +86,112 @@ println(s"Test RMSE: ${RMSE(preds.map(e => (e._2, e._3)))}")
 \end{lstlisting}  
 ```
 
+#### GBDT算法
+
+```
+// read training data and testing data from disk
+val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
+
+// train a model of GBDT for multiple classification
+val gbdt_model = GBDT.train(train,
+  impurity = "Variance",
+  max_depth = 15,
+  max_bins = 32,
+  bin_samples = 10000,
+  min_node_size = 10,
+  min_info_gain = 1e-6,
+  num_round = 20)
+
+// predict for testing data using the model
+val preds = gbdt_model.predict(test)
+// calculate testing error
+val err = preds.filter(r => r._2 != r._3).count().toDouble / test.count()
+println(s"Test Error: $err")
+```
+
+#### GBRT算法
+
+```
+// read training data and testing data from disk
+val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
+
+// train a model of GBRT for regression
+val gbrt_model = GBRT.train(
+  train,
+  Array(("test", test)),
+  impurity = "Variance",
+  max_depth = 15,
+  max_bins = 32,
+  bin_samples = 10000,
+  min_node_size = 10,
+  min_info_gain = 1e-6,
+  num_round = 100,
+  learn_rate = 0.1)
+
+// predict for testing data using the model
+val preds = gbrt_model.predict(test)
+// calculate testing error
+println(s”Test RMSE: ${RMSE(preds.map(e => (e._2, e._3)))}”)
+```
+
+#### RandomForest算法
+
+*	分类
+
+```
+// read training data and testing data from disk
+val train = Points.readLibSVMFile(sc, data_dir + "a1a").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "a1a.t").cache()
+
+// train a model of Random Forest for classification
+val rf_model = RandomForest.train(
+  train,
+  impurity = "Gini",
+  max_depth = 10,
+  max_bins = 32,
+  bin_samples = 10000,
+  min_node_size = 15,
+  min_info_gain = 1e-6,
+  row_rate = 0.6,
+  col_rate = 0.6,
+  num_trees = 100)
+
+// predict for testing data using the model
+val preds = rf_model.predict(test)
+// calculate testing error
+val err = preds.filter(r => r._2 != r._3).count().toDouble / test.count()
+println(s"Test Error: $err")
+```
+
+*	回归
+
+```
+// read training data and testing data from disk
+val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
+
+// train a model of Random Forest for regression
+val rf_model = RandomForest.train(
+  train,
+  impurity = "Variance",
+  max_depth = 15,
+  max_bins = 32,
+  bin_samples = 10000,
+  min_node_size = 10,
+  min_info_gain = 1e-6,
+  row_rate = 0.6,
+  col_rate = 0.6,
+  num_trees = 100)
+
+// predict for testing data use the model
+val preds = rf_model.predict(test)
+// calculate testing error
+println(s"Test RMSE: ${RMSE(preds.map(e => (e._2, e._3)))}")
+```
+
+
 ****
 
 ###<a name="test">算法测试</a>
