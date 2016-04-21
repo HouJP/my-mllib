@@ -31,7 +31,60 @@
 
 ###<a name="usage">使用说明</a>
 
-TODO
+#### CART算法
+*	分类	
+	
+```
+// read training data and testing data from disk
+val train = Points.readLibSVMFile(sc, data_dir + "a1a").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "a1a.t").cache()
+
+// train a model of CART for classification
+val cart_model = CART.train(
+  train,
+  impurity = "Gini",
+  max_depth = 10,
+  max_bins = 32,
+  bin_samples = 10000,
+  min_node_size = 15,
+  min_info_gain = 1e-6)
+
+// show structure of CART model
+cart_model.printStructure()
+
+// predict for testing data using the model
+val preds = cart_model.predict(test)
+// calculate testing error
+val err = preds.filter(r => r._2 != r._3).count().toDouble / test.count()
+println(s"Test Error: $err")
+```
+
+* 回归
+
+```
+// read training data and testing data from disk
+val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
+val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
+
+// train a model of CART for regression
+val cart_model = CART.train(
+  train,
+  impurity = "Variance",
+  max_depth = 15,
+  max_bins = 32,
+  bin_samples = 10000,
+  min_node_size = 10,
+  min_info_gain = 1e-6)
+
+// show structure of CART model
+cart_model.printStructure()
+
+// predict for testing data use the model
+val preds = cart_model.predict(test)
+// calculate testing error
+println(s"Test RMSE: ${RMSE(preds.map(e => (e._2, e._3)))}")
+\end{lstlisting}  
+```
 
 ****
 
