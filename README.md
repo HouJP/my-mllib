@@ -25,6 +25,8 @@
 *	Gradient Boosting Regression Trees (used for regression)
 *	Random Forest (used for regression)
 
+设计文档请点击[这里](https://github.com/HouJP/my-mllib/blob/master/doc/trees.pdf)获取。
+
 ****
 
 ###<a name="usage">使用说明</a>
