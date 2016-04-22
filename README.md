@@ -34,7 +34,7 @@
 #### CART算法
 *	分类	
 	
-```
+```scala
 // read training data and testing data from disk
 val train = Points.readLibSVMFile(sc, data_dir + "a1a").cache()
 val test = Points.readLibSVMFile(sc, data_dir + "a1a.t").cache()
