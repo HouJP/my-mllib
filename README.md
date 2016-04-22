@@ -61,7 +61,7 @@ println(s"Test Error: $err")
 
 * 回归
 
-```
+```scala
 // read training data and testing data from disk
 val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
 val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
@@ -88,7 +88,7 @@ println(s"Test RMSE: ${RMSE(preds.map(e => (e._2, e._3)))}")
 
 #### GBDT算法
 
-```
+```scala
 // read training data and testing data from disk
 val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
 val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
@@ -112,7 +112,7 @@ println(s"Test Error: $err")
 
 #### GBRT算法
 
-```
+```scala
 // read training data and testing data from disk
 val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
 val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
@@ -140,7 +140,7 @@ println(s”Test RMSE: ${RMSE(preds.map(e => (e._2, e._3)))}”)
 
 *	分类
 
-```
+```scala
 // read training data and testing data from disk
 val train = Points.readLibSVMFile(sc, data_dir + "a1a").cache()
 val test = Points.readLibSVMFile(sc, data_dir + "a1a.t").cache()
@@ -167,7 +167,7 @@ println(s"Test Error: $err")
 
 *	回归
 
-```
+```scala
 // read training data and testing data from disk
 val train = Points.readLibSVMFile(sc, data_dir + "cadata.train").cache()
 val test = Points.readLibSVMFile(sc, data_dir + "cadata.test").cache()
