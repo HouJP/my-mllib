@@ -1,4 +1,4 @@
-name := "gbdt"
+name := "my-mllib"
 
 version := "1.0"
 
