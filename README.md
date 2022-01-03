@@ -1,8 +1,8 @@
 ****
 
-#<center>my-mllib</center>
-####<center>Author: HouJP</center>
-####<center>E-mail: houjp1992@gmail.com</center>
+# <center>Machine Learning Lib</center>
+#### <center>Author: HouJP</center>
+#### <center>E-mail: houjp1992@gmail.com</center>
 
 ****
 
